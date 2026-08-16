@@ -14,19 +14,33 @@ import {
     deactivateProduct
 } from "./api/productApi";
 
+import {
+    getOrders,
+    getOrdersByStatus,
+    createOrder,
+    updateOrderStatus,
+    cancelOrder
+} from "./api/orderApi";
+
 
 function App() {
 
     const [activePage, setActivePage] = useState("categories");
 
-    // ================= CATEGORY STATE =================
+    // ============================================================
+    // CATEGORY STATE
+    // ============================================================
 
     const [categories, setCategories] = useState([]);
     const [categoryName, setCategoryName] = useState("");
     const [categoryDescription, setCategoryDescription] = useState("");
     const [editingCategoryId, setEditingCategoryId] = useState(null);
+    const [loadingCategories, setLoadingCategories] = useState(false);
 
-    // ================= PRODUCT STATE =================
+
+    // ============================================================
+    // PRODUCT STATE
+    // ============================================================
 
     const [products, setProducts] = useState([]);
 
@@ -38,12 +52,26 @@ function App() {
     const [productInventory, setProductInventory] = useState("");
 
     const [editingProductId, setEditingProductId] = useState(null);
-
     const [loadingProducts, setLoadingProducts] = useState(false);
-    const [loadingCategories, setLoadingCategories] = useState(false);
 
 
-    // ================= LOAD CATEGORIES =================
+    // ============================================================
+    // ORDER STATE
+    // ============================================================
+
+    const [orders, setOrders] = useState([]);
+    const [orderFilter, setOrderFilter] = useState("ALL");
+    const [loadingOrders, setLoadingOrders] = useState(false);
+
+    const [customerId, setCustomerId] = useState("");
+    const [orderTotalAmount, setOrderTotalAmount] = useState("");
+    const [shippingAddress, setShippingAddress] = useState("");
+    const [creatingOrder, setCreatingOrder] = useState(false);
+
+
+    // ============================================================
+    // LOAD CATEGORIES
+    // ============================================================
 
     const loadCategories = async () => {
 
@@ -53,7 +81,11 @@ function App() {
 
             const response = await getCategories();
 
-            setCategories(response.data);
+            setCategories(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
 
         } catch (error) {
 
@@ -68,7 +100,9 @@ function App() {
     };
 
 
-    // ================= LOAD PRODUCTS =================
+    // ============================================================
+    // LOAD PRODUCTS
+    // ============================================================
 
     const loadProducts = async () => {
 
@@ -78,11 +112,20 @@ function App() {
 
             const response = await getProducts();
 
-            setProducts(response.data);
+            setProducts(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
 
         } catch (error) {
 
             console.error("Error loading products:", error);
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to load products"
+            );
 
         } finally {
 
@@ -93,74 +136,223 @@ function App() {
     };
 
 
-    // ================= INITIAL LOAD =================
+    // ============================================================
+    // LOAD ORDERS
+    // ============================================================
+
+    const loadOrders = async () => {
+
+        try {
+
+            setLoadingOrders(true);
+
+            let response;
+
+            if (orderFilter === "ALL") {
+
+                response = await getOrders();
+
+            } else {
+
+                response = await getOrdersByStatus(orderFilter);
+
+            }
+
+            setOrders(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error("Error loading orders:", error);
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to load orders"
+            );
+
+        } finally {
+
+            setLoadingOrders(false);
+
+        }
+
+    };
+
+
+    // ============================================================
+    // INITIAL CATEGORY LOAD
+    // ============================================================
 
     useEffect(() => {
 
-        const loadInitialData = async () => {
+        let cancelled = false;
+
+        const fetchCategories = async () => {
 
             try {
 
-                const categoryResponse = await getCategories();
+                const response = await getCategories();
 
-                setCategories(categoryResponse.data);
+                if (!cancelled) {
+
+                    setCategories(
+                        Array.isArray(response.data)
+                            ? response.data
+                            : []
+                    );
+
+                }
 
             } catch (error) {
 
-                console.error(
-                    "Error loading categories:",
-                    error
-                );
+                if (!cancelled) {
+
+                    console.error(
+                        "Error loading categories:",
+                        error
+                    );
+
+                }
 
             }
 
         };
 
-        loadInitialData();
+        fetchCategories();
+
+        return () => {
+
+            cancelled = true;
+
+        };
 
     }, []);
 
 
-    // ================= LOAD PRODUCTS WHEN PAGE CHANGES =================
+    // ============================================================
+    // LOAD PRODUCTS / ORDERS WHEN PAGE CHANGES
+    // ============================================================
 
     useEffect(() => {
 
-        if (activePage !== "products") {
-            return;
-        }
+        let cancelled = false;
 
-        const loadProductData = async () => {
+        const fetchPageData = async () => {
 
-            try {
+            if (activePage === "products") {
 
-                setLoadingProducts(true);
+                try {
 
-                const response = await getProducts();
+                    setLoadingProducts(true);
 
-                setProducts(response.data);
+                    const response = await getProducts();
 
-            } catch (error) {
+                    if (!cancelled) {
 
-                console.error(
-                    "Error loading products:",
-                    error
-                );
+                        setProducts(
+                            Array.isArray(response.data)
+                                ? response.data
+                                : []
+                        );
 
-            } finally {
+                    }
 
-                setLoadingProducts(false);
+                } catch (error) {
+
+                    if (!cancelled) {
+
+                        console.error(
+                            "Error loading products:",
+                            error
+                        );
+
+                    }
+
+                } finally {
+
+                    if (!cancelled) {
+
+                        setLoadingProducts(false);
+
+                    }
+
+                }
+
+            }
+
+
+            if (activePage === "orders") {
+
+                try {
+
+                    setLoadingOrders(true);
+
+                    let response;
+
+                    if (orderFilter === "ALL") {
+
+                        response = await getOrders();
+
+                    } else {
+
+                        response =
+                            await getOrdersByStatus(
+                                orderFilter
+                            );
+
+                    }
+
+                    if (!cancelled) {
+
+                        setOrders(
+                            Array.isArray(response.data)
+                                ? response.data
+                                : []
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    if (!cancelled) {
+
+                        console.error(
+                            "Error loading orders:",
+                            error
+                        );
+
+                    }
+
+                } finally {
+
+                    if (!cancelled) {
+
+                        setLoadingOrders(false);
+
+                    }
+
+                }
 
             }
 
         };
 
-        loadProductData();
+        fetchPageData();
 
-    }, [activePage]);
+        return () => {
+
+            cancelled = true;
+
+        };
+
+    }, [activePage, orderFilter]);
 
 
     // ============================================================
-    // CATEGORY FUNCTIONS
+    // CATEGORY SUBMIT
     // ============================================================
 
     const handleCategorySubmit = async (e) => {
@@ -182,8 +374,8 @@ function App() {
                 await updateCategory(
                     editingCategoryId,
                     {
-                        categoryName,
-                        description: categoryDescription
+                        categoryName: categoryName.trim(),
+                        description: categoryDescription.trim()
                     }
                 );
 
@@ -191,8 +383,8 @@ function App() {
 
                 await createCategory(
                     {
-                        categoryName,
-                        description: categoryDescription
+                        categoryName: categoryName.trim(),
+                        description: categoryDescription.trim()
                     }
                 );
 
@@ -211,12 +403,19 @@ function App() {
                 error
             );
 
-            alert("Unable to save category");
+            alert(
+                error.response?.data?.message ||
+                "Unable to save category"
+            );
 
         }
 
     };
 
+
+    // ============================================================
+    // CATEGORY EDIT
+    // ============================================================
 
     const handleCategoryEdit = (category) => {
 
@@ -235,6 +434,10 @@ function App() {
     };
 
 
+    // ============================================================
+    // CATEGORY DEACTIVATE
+    // ============================================================
+
     const handleCategoryDeactivate = async (id) => {
 
         const confirmed = window.confirm(
@@ -242,7 +445,9 @@ function App() {
         );
 
         if (!confirmed) {
+
             return;
+
         }
 
         try {
@@ -258,26 +463,31 @@ function App() {
                 error
             );
 
-            alert("Unable to deactivate category");
+            alert(
+                error.response?.data?.message ||
+                "Unable to deactivate category"
+            );
 
         }
 
     };
 
 
+    // ============================================================
+    // CANCEL CATEGORY EDIT
+    // ============================================================
+
     const cancelCategoryEdit = () => {
 
         setEditingCategoryId(null);
-
         setCategoryName("");
-
         setCategoryDescription("");
 
     };
 
 
     // ============================================================
-    // PRODUCT FUNCTIONS
+    // RESET PRODUCT FORM
     // ============================================================
 
     const resetProductForm = () => {
@@ -288,11 +498,14 @@ function App() {
         setProductSku("");
         setProductCategoryId("");
         setProductInventory("");
-
         setEditingProductId(null);
 
     };
 
+
+    // ============================================================
+    // PRODUCT SUBMIT
+    // ============================================================
 
     const handleProductSubmit = async (e) => {
 
@@ -301,7 +514,6 @@ function App() {
         if (!productName.trim()) {
 
             alert("Product name is required");
-
             return;
 
         }
@@ -309,15 +521,16 @@ function App() {
         if (!productDescription.trim()) {
 
             alert("Product description is required");
-
             return;
 
         }
 
-        if (!productPrice || Number(productPrice) <= 0) {
+        if (
+            productPrice === "" ||
+            Number(productPrice) <= 0
+        ) {
 
             alert("Price must be greater than 0");
-
             return;
 
         }
@@ -325,7 +538,6 @@ function App() {
         if (!productSku.trim()) {
 
             alert("SKU is required");
-
             return;
 
         }
@@ -333,7 +545,6 @@ function App() {
         if (!productCategoryId) {
 
             alert("Please select a category");
-
             return;
 
         }
@@ -344,11 +555,9 @@ function App() {
         ) {
 
             alert("Inventory count cannot be negative");
-
             return;
 
         }
-
 
         const productData = {
 
@@ -395,11 +604,6 @@ function App() {
                 error
             );
 
-            console.error(
-                "Backend response:",
-                error.response?.data
-            );
-
             alert(
                 error.response?.data?.message ||
                 "Unable to save product"
@@ -410,11 +614,13 @@ function App() {
     };
 
 
+    // ============================================================
+    // PRODUCT EDIT
+    // ============================================================
+
     const handleProductEdit = (product) => {
 
-        setEditingProductId(
-            product.productId
-        );
+        setEditingProductId(product.productId);
 
         setProductName(
             product.productName || ""
@@ -445,6 +651,10 @@ function App() {
     };
 
 
+    // ============================================================
+    // PRODUCT DEACTIVATE
+    // ============================================================
+
     const handleProductDeactivate = async (product) => {
 
         const confirmed = window.confirm(
@@ -452,7 +662,9 @@ function App() {
         );
 
         if (!confirmed) {
+
             return;
+
         }
 
         try {
@@ -470,16 +682,179 @@ function App() {
                 error
             );
 
-            alert("Unable to deactivate product");
+            alert(
+                error.response?.data?.message ||
+                "Unable to deactivate product"
+            );
 
         }
 
     };
 
 
-    const cancelProductEdit = () => {
+    // ============================================================
+    // RESET ORDER FORM
+    // ============================================================
 
-        resetProductForm();
+    const resetOrderForm = () => {
+
+        setCustomerId("");
+        setOrderTotalAmount("");
+        setShippingAddress("");
+
+    };
+
+
+    // ============================================================
+    // CREATE ORDER
+    // ============================================================
+
+    const handleOrderSubmit = async (e) => {
+
+        e.preventDefault();
+
+        if (!customerId || Number(customerId) <= 0) {
+
+            alert("Customer ID must be greater than 0");
+            return;
+
+        }
+
+        if (
+            orderTotalAmount === "" ||
+            Number(orderTotalAmount) <= 0
+        ) {
+
+            alert("Total amount must be greater than 0");
+            return;
+
+        }
+
+        if (!shippingAddress.trim()) {
+
+            alert("Shipping address is required");
+            return;
+
+        }
+
+        const orderData = {
+
+            customerId: Number(customerId),
+
+            totalAmount: Number(orderTotalAmount),
+
+            orderStatus: "Pending",
+
+            shippingAddress: shippingAddress.trim()
+
+        };
+
+
+        try {
+
+            setCreatingOrder(true);
+
+            await createOrder(orderData);
+
+            alert("Order created successfully");
+
+            resetOrderForm();
+
+            await loadOrders();
+
+        } catch (error) {
+
+            console.error(
+                "Error creating order:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to create order"
+            );
+
+        } finally {
+
+            setCreatingOrder(false);
+
+        }
+
+    };
+
+
+    // ============================================================
+    // ORDER STATUS UPDATE
+    // ============================================================
+
+    const handleOrderStatusUpdate = async (
+        orderId,
+        status
+    ) => {
+
+        try {
+
+            await updateOrderStatus(
+                orderId,
+                status
+            );
+
+            await loadOrders();
+
+        } catch (error) {
+
+            console.error(
+                "Error updating order status:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to update order status"
+            );
+
+        }
+
+    };
+
+
+    // ============================================================
+    // ORDER CANCEL
+    // ============================================================
+
+    const handleOrderCancel = async (order) => {
+
+        const confirmed = window.confirm(
+            `Are you sure you want to cancel order #${order.orderId}?`
+        );
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+        try {
+
+            await cancelOrder(
+                order.orderId
+            );
+
+            await loadOrders();
+
+        } catch (error) {
+
+            console.error(
+                "Error cancelling order:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to cancel order"
+            );
+
+        }
 
     };
 
@@ -492,814 +867,1166 @@ function App() {
 
         <div className="app">
 
-            {/* ================= NAVBAR ================= */}
+            {/* NAVBAR */}
 
             <header className="navbar">
 
-                <div>
+                <h1>
+                    E-Commerce Admin
+                </h1>
 
-                    <h1>
-                        E-Commerce Admin
-                    </h1>
-
-                    <span>
-                        Management System
-                    </span>
-
-                </div>
-
-
-                <nav>
+                <div className="nav-buttons">
 
                     <button
+                        onClick={() =>
+                            setActivePage("categories")
+                        }
                         className={
                             activePage === "categories"
                                 ? "nav-btn active"
                                 : "nav-btn"
                         }
-                        onClick={() =>
-                            setActivePage("categories")
-                        }
                     >
                         Categories
                     </button>
 
-
                     <button
+                        onClick={() =>
+                            setActivePage("products")
+                        }
                         className={
                             activePage === "products"
                                 ? "nav-btn active"
                                 : "nav-btn"
                         }
-                        onClick={() =>
-                            setActivePage("products")
-                        }
                     >
                         Products
                     </button>
 
-                </nav>
+                    <button
+                        onClick={() =>
+                            setActivePage("orders")
+                        }
+                        className={
+                            activePage === "orders"
+                                ? "nav-btn active"
+                                : "nav-btn"
+                        }
+                    >
+                        Orders
+                    </button>
+
+                </div>
 
             </header>
 
 
-            {/* ====================================================
-                CATEGORY PAGE
-            ==================================================== */}
-
-            {activePage === "categories" && (
-
-                <main className="container">
-
-                    {/* CATEGORY FORM */}
-
-                    <section className="form-card">
-
-                        <h2>
-                            {editingCategoryId
-                                ? "Update Category"
-                                : "Create Category"}
-                        </h2>
+            <main className="container">
 
 
-                        <form
-                            onSubmit={
-                                handleCategorySubmit
-                            }
-                        >
+                {/* ==================================================
+                    CATEGORY PAGE
+                ================================================== */}
 
-                            <div className="form-group">
+                {activePage === "categories" && (
 
-                                <label>
-                                    Category Name
-                                </label>
+                    <>
 
-                                <input
-                                    type="text"
-                                    value={categoryName}
-                                    onChange={(e) =>
-                                        setCategoryName(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter category name"
-                                />
+                        <section className="form-card">
 
-                            </div>
-
-
-                            <div className="form-group">
-
-                                <label>
-                                    Description
-                                </label>
-
-                                <textarea
-                                    value={
-                                        categoryDescription
-                                    }
-                                    onChange={(e) =>
-                                        setCategoryDescription(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter category description"
-                                    rows="4"
-                                />
-
-                            </div>
-
-
-                            <div className="form-actions">
-
-                                <button type="submit">
-
-                                    {editingCategoryId
+                            <h2>
+                                {
+                                    editingCategoryId
                                         ? "Update Category"
-                                        : "Add Category"}
+                                        : "Create Category"
+                                }
+                            </h2>
 
-                                </button>
+                            <form
+                                onSubmit={handleCategorySubmit}
+                            >
 
+                                <div className="form-group">
 
-                                {editingCategoryId && (
+                                    <label>
+                                        Category Name
+                                    </label>
 
-                                    <button
-                                        type="button"
-                                        className="cancel-btn"
-                                        onClick={
-                                            cancelCategoryEdit
+                                    <input
+                                        type="text"
+                                        value={categoryName}
+                                        onChange={(e) =>
+                                            setCategoryName(
+                                                e.target.value
+                                            )
                                         }
-                                    >
-                                        Cancel
+                                        placeholder="Enter category name"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Description
+                                    </label>
+
+                                    <textarea
+                                        value={
+                                            categoryDescription
+                                        }
+                                        onChange={(e) =>
+                                            setCategoryDescription(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter category description"
+                                        rows="4"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-actions">
+
+                                    <button type="submit">
+
+                                        {
+                                            editingCategoryId
+                                                ? "Update Category"
+                                                : "Add Category"
+                                        }
+
                                     </button>
 
-                                )}
 
-                            </div>
+                                    {editingCategoryId && (
 
-                        </form>
-
-                    </section>
-
-
-                    {/* CATEGORY TABLE */}
-
-                    <section className="table-card">
-
-                        <div className="table-header">
-
-                            <div>
-
-                                <h2>
-                                    Categories
-                                </h2>
-
-                                <p>
-                                    Manage your product categories
-                                </p>
-
-                            </div>
-
-
-                            <span className="count">
-
-                                {categories.length}
-                                {" "}
-                                Categories
-
-                            </span>
-
-                        </div>
-
-
-                        <div className="table-container">
-
-                            <table>
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th>ID</th>
-
-                                        <th>
-                                            Category Name
-                                        </th>
-
-                                        <th>
-                                            Description
-                                        </th>
-
-                                        <th>
-                                            Status
-                                        </th>
-
-                                        <th>
-                                            Actions
-                                        </th>
-
-                                    </tr>
-
-                                </thead>
-
-
-                                <tbody>
-
-                                    {loadingCategories ? (
-
-                                        <tr>
-
-                                            <td
-                                                colSpan="5"
-                                                className="empty"
-                                            >
-                                                Loading categories...
-                                            </td>
-
-                                        </tr>
-
-                                    ) : categories.length === 0 ? (
-
-                                        <tr>
-
-                                            <td
-                                                colSpan="5"
-                                                className="empty"
-                                            >
-                                                No categories found
-                                            </td>
-
-                                        </tr>
-
-                                    ) : (
-
-                                        categories.map(
-                                            (category) => (
-
-                                                <tr
-                                                    key={
-                                                        category.categoryId
-                                                    }
-                                                >
-
-                                                    <td>
-                                                        {
-                                                            category.categoryId
-                                                        }
-                                                    </td>
-
-
-                                                    <td>
-                                                        {
-                                                            category.categoryName
-                                                        }
-                                                    </td>
-
-
-                                                    <td>
-                                                        {
-                                                            category.description
-                                                        }
-                                                    </td>
-
-
-                                                    <td>
-
-                                                        <span
-                                                            className={
-                                                                category.status
-                                                                    ? "status active"
-                                                                    : "status inactive"
-                                                            }
-                                                        >
-
-                                                            {category.status
-                                                                ? "Active"
-                                                                : "Inactive"}
-
-                                                        </span>
-
-                                                    </td>
-
-
-                                                    <td>
-
-                                                        <button
-                                                            className="edit-btn"
-                                                            onClick={() =>
-                                                                handleCategoryEdit(
-                                                                    category
-                                                                )
-                                                            }
-                                                        >
-                                                            Edit
-                                                        </button>
-
-
-                                                        {category.status && (
-
-                                                            <button
-                                                                className="delete-btn"
-                                                                onClick={() =>
-                                                                    handleCategoryDeactivate(
-                                                                        category.categoryId
-                                                                    )
-                                                                }
-                                                            >
-                                                                Deactivate
-                                                            </button>
-
-                                                        )}
-
-                                                    </td>
-
-                                                </tr>
-
-                                            )
-                                        )
+                                        <button
+                                            type="button"
+                                            className="cancel-btn"
+                                            onClick={
+                                                cancelCategoryEdit
+                                            }
+                                        >
+                                            Cancel
+                                        </button>
 
                                     )}
 
-                                </tbody>
+                                </div>
 
-                            </table>
+                            </form>
 
-                        </div>
-
-                    </section>
-
-                </main>
-
-            )}
+                        </section>
 
 
-            {/* ====================================================
-                PRODUCT PAGE
-            ==================================================== */}
+                        <section className="table-card">
 
-            {activePage === "products" && (
+                            <div className="table-header">
 
-                <main className="container">
+                                <div>
 
-                    {/* PRODUCT FORM */}
+                                    <h2>
+                                        Categories
+                                    </h2>
 
-                    <section className="form-card">
+                                    <p>
+                                        Manage your product categories
+                                    </p>
 
-                        <h2>
+                                </div>
 
-                            {editingProductId
-                                ? "Update Product"
-                                : "Create Product"}
-
-                        </h2>
-
-
-                        <form
-                            onSubmit={
-                                handleProductSubmit
-                            }
-                        >
-
-                            <div className="form-group">
-
-                                <label>
-                                    Product Name
-                                </label>
-
-                                <input
-                                    type="text"
-                                    value={productName}
-                                    onChange={(e) =>
-                                        setProductName(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter product name"
-                                />
+                                <span className="count">
+                                    {categories.length} Categories
+                                </span>
 
                             </div>
 
 
-                            <div className="form-group">
+                            <div className="table-container">
 
-                                <label>
-                                    Description
-                                </label>
+                                <table>
 
-                                <textarea
-                                    value={
-                                        productDescription
-                                    }
-                                    onChange={(e) =>
-                                        setProductDescription(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter product description"
-                                    rows="4"
-                                />
-
-                            </div>
-
-
-                            <div className="form-group">
-
-                                <label>
-                                    Price
-                                </label>
-
-                                <input
-                                    type="number"
-                                    value={productPrice}
-                                    onChange={(e) =>
-                                        setProductPrice(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter price"
-                                    min="0"
-                                    step="0.01"
-                                />
-
-                            </div>
-
-
-                            <div className="form-group">
-
-                                <label>
-                                    SKU
-                                </label>
-
-                                <input
-                                    type="text"
-                                    value={productSku}
-                                    onChange={(e) =>
-                                        setProductSku(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter SKU"
-                                />
-
-                            </div>
-
-
-                            <div className="form-group">
-
-                                <label>
-                                    Category
-                                </label>
-
-                                <select
-                                    value={
-                                        productCategoryId
-                                    }
-                                    onChange={(e) =>
-                                        setProductCategoryId(
-                                            e.target.value
-                                        )
-                                    }
-                                >
-
-                                    <option value="">
-                                        Select Category
-                                    </option>
-
-
-                                    {categories
-                                        .filter(
-                                            (category) =>
-                                                category.status === true
-                                        )
-                                        .map(
-                                            (category) => (
-
-                                                <option
-                                                    key={
-                                                        category.categoryId
-                                                    }
-                                                    value={
-                                                        category.categoryId
-                                                    }
-                                                >
-
-                                                    {
-                                                        category.categoryName
-                                                    }
-
-                                                </option>
-
-                                            )
-                                        )}
-
-                                </select>
-
-                            </div>
-
-
-                            <div className="form-group">
-
-                                <label>
-                                    Inventory Count
-                                </label>
-
-                                <input
-                                    type="number"
-                                    value={
-                                        productInventory
-                                    }
-                                    onChange={(e) =>
-                                        setProductInventory(
-                                            e.target.value
-                                        )
-                                    }
-                                    placeholder="Enter inventory count"
-                                    min="0"
-                                />
-
-                            </div>
-
-
-                            <div className="form-actions">
-
-                                <button type="submit">
-
-                                    {editingProductId
-                                        ? "Update Product"
-                                        : "Add Product"}
-
-                                </button>
-
-
-                                {editingProductId && (
-
-                                    <button
-                                        type="button"
-                                        className="cancel-btn"
-                                        onClick={
-                                            cancelProductEdit
-                                        }
-                                    >
-                                        Cancel
-                                    </button>
-
-                                )}
-
-                            </div>
-
-                        </form>
-
-                    </section>
-
-
-                    {/* PRODUCT TABLE */}
-
-                    <section className="table-card">
-
-                        <div className="table-header">
-
-                            <div>
-
-                                <h2>
-                                    Products
-                                </h2>
-
-                                <p>
-                                    Manage your products and inventory
-                                </p>
-
-                            </div>
-
-
-                            <span className="count">
-
-                                {products.length}
-                                {" "}
-                                Products
-
-                            </span>
-
-                        </div>
-
-
-                        <div className="table-container">
-
-                            <table>
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th>
-                                            ID
-                                        </th>
-
-                                        <th>
-                                            Product Name
-                                        </th>
-
-                                        <th>
-                                            SKU
-                                        </th>
-
-                                        <th>
-                                            Category
-                                        </th>
-
-                                        <th>
-                                            Price
-                                        </th>
-
-                                        <th>
-                                            Inventory
-                                        </th>
-
-                                        <th>
-                                            Status
-                                        </th>
-
-                                        <th>
-                                            Actions
-                                        </th>
-
-                                    </tr>
-
-                                </thead>
-
-
-                                <tbody>
-
-                                    {loadingProducts ? (
+                                    <thead>
 
                                         <tr>
 
-                                            <td
-                                                colSpan="8"
-                                                className="empty"
-                                            >
-                                                Loading products...
-                                            </td>
+                                            <th>ID</th>
+                                            <th>Category Name</th>
+                                            <th>Description</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
 
                                         </tr>
 
-                                    ) : products.length === 0 ? (
+                                    </thead>
 
-                                        <tr>
 
-                                            <td
-                                                colSpan="8"
-                                                className="empty"
-                                            >
-                                                No products found
-                                            </td>
+                                    <tbody>
 
-                                        </tr>
+                                        {loadingCategories ? (
 
-                                    ) : (
+                                            <tr>
 
-                                        products.map(
-                                            (product) => (
-
-                                                <tr
-                                                    key={
-                                                        product.productId
-                                                    }
+                                                <td
+                                                    colSpan="5"
+                                                    className="empty"
                                                 >
+                                                    Loading categories...
+                                                </td>
 
-                                                    <td>
-                                                        {
-                                                            product.productId
+                                            </tr>
+
+                                        ) : categories.length === 0 ? (
+
+                                            <tr>
+
+                                                <td
+                                                    colSpan="5"
+                                                    className="empty"
+                                                >
+                                                    No categories found
+                                                </td>
+
+                                            </tr>
+
+                                        ) : (
+
+                                            categories.map(
+                                                (category) => (
+
+                                                    <tr
+                                                        key={
+                                                            category.categoryId
                                                         }
-                                                    </td>
+                                                    >
 
-
-                                                    <td>
-
-                                                        <strong>
+                                                        <td>
                                                             {
-                                                                product.productName
+                                                                category.categoryId
                                                             }
-                                                        </strong>
+                                                        </td>
 
-                                                        <br />
-
-                                                        <small>
+                                                        <td>
                                                             {
-                                                                product.description
+                                                                category.categoryName
                                                             }
-                                                        </small>
+                                                        </td>
 
-                                                    </td>
-
-
-                                                    <td>
-                                                        {
-                                                            product.sku
-                                                        }
-                                                    </td>
-
-
-                                                    <td>
-
-                                                        {
-                                                            product.category
-                                                                ?.categoryName ||
-                                                            `Category #${product.category?.categoryId}`
-                                                        }
-
-                                                    </td>
-
-
-                                                    <td>
-
-                                                        ₹
-                                                        {Number(
-                                                            product.price
-                                                        ).toFixed(2)}
-
-                                                    </td>
-
-
-                                                    <td>
-                                                        {
-                                                            product.inventoryCount
-                                                        }
-                                                    </td>
-
-
-                                                    <td>
-
-                                                        <span
-                                                            className={
-                                                                product.status
-                                                                    ? "status active"
-                                                                    : "status inactive"
+                                                        <td>
+                                                            {
+                                                                category.description
                                                             }
-                                                        >
+                                                        </td>
 
-                                                            {product.status
-                                                                ? "Active"
-                                                                : "Inactive"}
+                                                        <td>
 
-                                                        </span>
+                                                            <span
+                                                                className={
+                                                                    category.status
+                                                                        ? "status active"
+                                                                        : "status inactive"
+                                                                }
+                                                            >
+                                                                {
+                                                                    category.status
+                                                                        ? "Active"
+                                                                        : "Inactive"
+                                                                }
+                                                            </span>
 
-                                                    </td>
+                                                        </td>
 
-
-                                                    <td>
-
-                                                        <button
-                                                            className="edit-btn"
-                                                            onClick={() =>
-                                                                handleProductEdit(
-                                                                    product
-                                                                )
-                                                            }
-                                                        >
-                                                            Edit
-                                                        </button>
-
-
-                                                        {product.status && (
+                                                        <td>
 
                                                             <button
-                                                                className="delete-btn"
+                                                                className="edit-btn"
                                                                 onClick={() =>
-                                                                    handleProductDeactivate(
+                                                                    handleCategoryEdit(
+                                                                        category
+                                                                    )
+                                                                }
+                                                            >
+                                                                Edit
+                                                            </button>
+
+
+                                                            {category.status && (
+
+                                                                <button
+                                                                    className="delete-btn"
+                                                                    onClick={() =>
+                                                                        handleCategoryDeactivate(
+                                                                            category.categoryId
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Deactivate
+                                                                </button>
+
+                                                            )}
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                )
+                                            )
+
+                                        )}
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                        </section>
+
+                    </>
+
+                )}
+
+
+                {/* ==================================================
+                    PRODUCT PAGE
+                ================================================== */}
+
+                {activePage === "products" && (
+
+                    <>
+
+                        <section className="form-card">
+
+                            <h2>
+                                {
+                                    editingProductId
+                                        ? "Update Product"
+                                        : "Create Product"
+                                }
+                            </h2>
+
+                            <form
+                                onSubmit={handleProductSubmit}
+                            >
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Product Name
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        value={productName}
+                                        onChange={(e) =>
+                                            setProductName(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter product name"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Description
+                                    </label>
+
+                                    <textarea
+                                        value={
+                                            productDescription
+                                        }
+                                        onChange={(e) =>
+                                            setProductDescription(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter product description"
+                                        rows="4"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-row">
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Price
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={
+                                                productPrice
+                                            }
+                                            onChange={(e) =>
+                                                setProductPrice(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter price"
+                                        />
+
+                                    </div>
+
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            SKU
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            value={productSku}
+                                            onChange={(e) =>
+                                                setProductSku(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter SKU"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+
+                                <div className="form-row">
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Category
+                                        </label>
+
+                                        <select
+                                            value={
+                                                productCategoryId
+                                            }
+                                            onChange={(e) =>
+                                                setProductCategoryId(
+                                                    e.target.value
+                                                )
+                                            }
+                                        >
+
+                                            <option value="">
+                                                Select Category
+                                            </option>
+
+                                            {categories
+                                                .filter(
+                                                    (category) =>
+                                                        category.status
+                                                )
+                                                .map(
+                                                    (category) => (
+
+                                                        <option
+                                                            key={
+                                                                category.categoryId
+                                                            }
+                                                            value={
+                                                                category.categoryId
+                                                            }
+                                                        >
+                                                            {
+                                                                category.categoryName
+                                                            }
+                                                        </option>
+
+                                                    )
+                                                )}
+
+                                        </select>
+
+                                    </div>
+
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Inventory Count
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={
+                                                productInventory
+                                            }
+                                            onChange={(e) =>
+                                                setProductInventory(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter inventory"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+
+                                <div className="form-actions">
+
+                                    <button type="submit">
+
+                                        {
+                                            editingProductId
+                                                ? "Update Product"
+                                                : "Add Product"
+                                        }
+
+                                    </button>
+
+
+                                    {editingProductId && (
+
+                                        <button
+                                            type="button"
+                                            className="cancel-btn"
+                                            onClick={
+                                                resetProductForm
+                                            }
+                                        >
+                                            Cancel
+                                        </button>
+
+                                    )}
+
+                                </div>
+
+                            </form>
+
+                        </section>
+
+
+                        <section className="table-card">
+
+                            <div className="table-header">
+
+                                <div>
+
+                                    <h2>
+                                        Products
+                                    </h2>
+
+                                    <p>
+                                        Manage your products and inventory
+                                    </p>
+
+                                </div>
+
+                                <span className="count">
+                                    {products.length} Products
+                                </span>
+
+                            </div>
+
+
+                            <div className="table-container">
+
+                                <table>
+
+                                    <thead>
+
+                                        <tr>
+
+                                            <th>ID</th>
+                                            <th>Product</th>
+                                            <th>SKU</th>
+                                            <th>Category</th>
+                                            <th>Price</th>
+                                            <th>Inventory</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        {loadingProducts ? (
+
+                                            <tr>
+
+                                                <td
+                                                    colSpan="8"
+                                                    className="empty"
+                                                >
+                                                    Loading products...
+                                                </td>
+
+                                            </tr>
+
+                                        ) : products.length === 0 ? (
+
+                                            <tr>
+
+                                                <td
+                                                    colSpan="8"
+                                                    className="empty"
+                                                >
+                                                    No products found
+                                                </td>
+
+                                            </tr>
+
+                                        ) : (
+
+                                            products.map(
+                                                (product) => (
+
+                                                    <tr
+                                                        key={
+                                                            product.productId
+                                                        }
+                                                    >
+
+                                                        <td>
+                                                            {
+                                                                product.productId
+                                                            }
+                                                        </td>
+
+                                                        <td>
+
+                                                            <strong>
+                                                                {
+                                                                    product.productName
+                                                                }
+                                                            </strong>
+
+                                                            <small>
+                                                                {
+                                                                    product.description
+                                                                }
+                                                            </small>
+
+                                                        </td>
+
+                                                        <td>
+                                                            {
+                                                                product.sku
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            {
+                                                                product.category?.categoryName ||
+                                                                `Category #${
+                                                                    product.category?.categoryId ||
+                                                                    "-"
+                                                                }`
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            ₹
+                                                            {
+                                                                Number(
+                                                                    product.price || 0
+                                                                ).toFixed(2)
+                                                            }
+                                                        </td>
+
+                                                        <td>
+                                                            {
+                                                                product.inventoryCount
+                                                            }
+                                                        </td>
+
+                                                        <td>
+
+                                                            <span
+                                                                className={
+                                                                    product.status
+                                                                        ? "status active"
+                                                                        : "status inactive"
+                                                                }
+                                                            >
+                                                                {
+                                                                    product.status
+                                                                        ? "Active"
+                                                                        : "Inactive"
+                                                                }
+                                                            </span>
+
+                                                        </td>
+
+                                                        <td>
+
+                                                            <button
+                                                                className="edit-btn"
+                                                                onClick={() =>
+                                                                    handleProductEdit(
                                                                         product
                                                                     )
                                                                 }
                                                             >
-                                                                Deactivate
+                                                                Edit
                                                             </button>
 
-                                                        )}
 
-                                                    </td>
+                                                            {product.status && (
 
-                                                </tr>
+                                                                <button
+                                                                    className="delete-btn"
+                                                                    onClick={() =>
+                                                                        handleProductDeactivate(
+                                                                            product
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Deactivate
+                                                                </button>
 
+                                                            )}
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                )
                                             )
-                                        )
 
-                                    )}
+                                        )}
 
-                                </tbody>
+                                    </tbody>
 
-                            </table>
+                                </table>
 
-                        </div>
+                            </div>
 
-                    </section>
+                        </section>
 
-                </main>
+                    </>
 
-            )}
+                )}
+
+
+                {/* ==================================================
+                    ORDER PAGE
+                ================================================== */}
+
+                {activePage === "orders" && (
+
+                    <>
+
+                        {/* CREATE ORDER */}
+
+                        <section className="form-card">
+
+                            <h2>
+                                Create Order
+                            </h2>
+
+                            <form
+                                onSubmit={handleOrderSubmit}
+                            >
+
+                                <div className="form-row">
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Customer ID
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={customerId}
+                                            onChange={(e) =>
+                                                setCustomerId(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter customer ID"
+                                        />
+
+                                    </div>
+
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Total Amount
+                                        </label>
+
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={
+                                                orderTotalAmount
+                                            }
+                                            onChange={(e) =>
+                                                setOrderTotalAmount(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter total amount"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Shipping Address
+                                    </label>
+
+                                    <textarea
+                                        value={
+                                            shippingAddress
+                                        }
+                                        onChange={(e) =>
+                                            setShippingAddress(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter shipping address"
+                                        rows="4"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-actions">
+
+                                    <button
+                                        type="submit"
+                                        disabled={
+                                            creatingOrder
+                                        }
+                                    >
+
+                                        {
+                                            creatingOrder
+                                                ? "Creating..."
+                                                : "Place Order"
+                                        }
+
+                                    </button>
+
+
+                                    <button
+                                        type="button"
+                                        className="cancel-btn"
+                                        onClick={
+                                            resetOrderForm
+                                        }
+                                    >
+                                        Clear
+                                    </button>
+
+                                </div>
+
+                            </form>
+
+                        </section>
+
+
+                        {/* ORDER DASHBOARD */}
+
+                        <section className="table-card">
+
+                            <div className="table-header">
+
+                                <div>
+
+                                    <h2>
+                                        Orders
+                                    </h2>
+
+                                    <p>
+                                        Manage customer orders
+                                    </p>
+
+                                </div>
+
+
+                                <div>
+
+                                    <select
+                                        value={orderFilter}
+                                        onChange={(e) =>
+                                            setOrderFilter(
+                                                e.target.value
+                                            )
+                                        }
+                                    >
+
+                                        <option value="ALL">
+                                            All Orders
+                                        </option>
+
+                                        <option value="PENDING">
+                                            Pending
+                                        </option>
+
+                                        <option value="SHIPPED">
+                                            Shipped
+                                        </option>
+
+                                        <option value="DELIVERED">
+                                            Delivered
+                                        </option>
+
+                                        <option value="CANCELLED">
+                                            Cancelled
+                                        </option>
+
+                                    </select>
+
+                                </div>
+
+                            </div>
+
+
+                            <div className="table-container">
+
+                                {loadingOrders ? (
+
+                                    <p className="empty">
+                                        Loading orders...
+                                    </p>
+
+                                ) : orders.length === 0 ? (
+
+                                    <p className="empty">
+                                        No orders found
+                                    </p>
+
+                                ) : (
+
+                                    <table>
+
+                                        <thead>
+
+                                            <tr>
+
+                                                <th>
+                                                    Order ID
+                                                </th>
+
+                                                <th>
+                                                    Customer
+                                                </th>
+
+                                                <th>
+                                                    Total
+                                                </th>
+
+                                                <th>
+                                                    Shipping Address
+                                                </th>
+
+                                                <th>
+                                                    Status
+                                                </th>
+
+                                                <th>
+                                                    Created
+                                                </th>
+
+                                                <th>
+                                                    Actions
+                                                </th>
+
+                                            </tr>
+
+                                        </thead>
+
+
+                                        <tbody>
+
+                                            {orders.map(
+                                                (order) => (
+
+                                                    <tr
+                                                        key={
+                                                            order.orderId
+                                                        }
+                                                    >
+
+                                                        <td>
+                                                            #
+                                                            {
+                                                                order.orderId
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+                                                            {
+                                                                order.customerId ??
+                                                                "-"
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+                                                            ₹
+                                                            {
+                                                                Number(
+                                                                    order.totalAmount || 0
+                                                                ).toFixed(2)
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+                                                            {
+                                                                order.shippingAddress ||
+                                                                "-"
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            <span
+                                                                className={
+                                                                    String(
+                                                                        order.orderStatus
+                                                                    ).toUpperCase() ===
+                                                                    "CANCELLED"
+                                                                        ? "status inactive"
+                                                                        : "status active"
+                                                                }
+                                                            >
+                                                                {
+                                                                    order.orderStatus
+                                                                }
+                                                            </span>
+
+                                                        </td>
+
+
+                                                        <td>
+                                                            {
+                                                                order.createdAt
+                                                                    ? new Date(
+                                                                        order.createdAt
+                                                                    ).toLocaleString()
+                                                                    : "-"
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            {
+                                                                String(
+                                                                    order.orderStatus
+                                                                ).toUpperCase() !==
+                                                                    "CANCELLED" && (
+
+                                                                    <select
+                                                                        value={
+                                                                            order.orderStatus
+                                                                        }
+                                                                        onChange={(e) =>
+                                                                            handleOrderStatusUpdate(
+                                                                                order.orderId,
+                                                                                e.target.value
+                                                                            )
+                                                                        }
+                                                                    >
+
+                                                                        <option value="Pending">
+                                                                            Pending
+                                                                        </option>
+
+                                                                        <option value="Shipped">
+                                                                            Shipped
+                                                                        </option>
+
+                                                                        <option value="Delivered">
+                                                                            Delivered
+                                                                        </option>
+
+                                                                        <option value="Cancelled">
+                                                                            Cancelled
+                                                                        </option>
+
+                                                                    </select>
+
+                                                                )
+                                                            }
+
+
+                                                            {
+                                                                String(
+                                                                    order.orderStatus
+                                                                ).toUpperCase() !==
+                                                                    "CANCELLED" &&
+                                                                String(
+                                                                    order.orderStatus
+                                                                ).toUpperCase() !==
+                                                                    "SHIPPED" && (
+
+                                                                    <button
+                                                                        className="delete-btn"
+                                                                        onClick={() =>
+                                                                            handleOrderCancel(
+                                                                                order
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        Cancel
+                                                                    </button>
+
+                                                                )
+                                                            }
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                )
+                                            )}
+
+                                        </tbody>
+
+                                    </table>
+
+                                )}
+
+                            </div>
+
+                        </section>
+
+                    </>
+
+                )}
+
+            </main>
 
         </div>
 
     );
 
 }
+
 
 export default App;
