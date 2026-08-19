@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 
 import {
+    getCustomers,
+    createCustomer,
+    updateCustomer,
+    deactivateCustomer
+} from "./api/customerApi";
+
+import {
     getCategories,
     createCategory,
     updateCategory,
@@ -67,6 +74,21 @@ function App() {
     const [orderTotalAmount, setOrderTotalAmount] = useState("");
     const [shippingAddress, setShippingAddress] = useState("");
     const [creatingOrder, setCreatingOrder] = useState(false);
+
+    // ============================================================
+    // CUSTOMER STATE
+    // ============================================================
+
+    const [customers, setCustomers] = useState([]);
+
+    const [customerFirstName, setCustomerFirstName] = useState("");
+    const [customerLastName, setCustomerLastName] = useState("");
+    const [customerEmail, setCustomerEmail] = useState("");
+    const [customerPhone, setCustomerPhone] = useState("");
+
+    const [editingCustomerId, setEditingCustomerId] = useState(null);
+
+    const [loadingCustomers, setLoadingCustomers] = useState(false);
 
 
     // ============================================================
@@ -337,6 +359,49 @@ function App() {
                 }
 
             }
+
+            // ---------------- CUSTOMERS ----------------
+
+        if (activePage === "customers") {
+
+            try {
+
+                setLoadingCustomers(true);
+
+                const response = await getCustomers();
+
+                if (!cancelled) {
+
+                    setCustomers(
+                        Array.isArray(response.data)
+                            ? response.data
+                            : []
+                    );
+
+                }
+
+            } catch (error) {
+
+                if (!cancelled) {
+
+                    console.error(
+                        "Error loading customers:",
+                        error
+                    );
+
+                }
+
+            } finally {
+
+                if (!cancelled) {
+
+                    setLoadingCustomers(false);
+
+                }
+
+            }
+
+        }
 
         };
 
@@ -858,6 +923,199 @@ function App() {
 
     };
 
+    // ============================================================
+    // CUSTOMER FUNCTIONS
+    // ============================================================
+
+    const loadCustomers = async () => {
+
+        try {
+
+            setLoadingCustomers(true);
+
+            const response = await getCustomers();
+
+            setCustomers(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading customers:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to load customers"
+            );
+
+        } finally {
+
+            setLoadingCustomers(false);
+
+        }
+    };
+
+
+    const resetCustomerForm = () => {
+
+        setCustomerFirstName("");
+        setCustomerLastName("");
+        setCustomerEmail("");
+        setCustomerPhone("");
+
+        setEditingCustomerId(null);
+
+    };
+
+
+    const handleCustomerSubmit = async (e) => {
+
+        e.preventDefault();
+
+        if (!customerFirstName.trim()) {
+
+            alert("First name is required");
+            return;
+
+        }
+
+        if (!customerLastName.trim()) {
+
+            alert("Last name is required");
+            return;
+
+        }
+
+        if (!customerEmail.trim()) {
+
+            alert("Email is required");
+            return;
+
+        }
+
+        if (!customerPhone.trim()) {
+
+            alert("Phone number is required");
+            return;
+
+        }
+
+        const customerData = {
+
+            firstName: customerFirstName.trim(),
+
+            lastName: customerLastName.trim(),
+
+            email: customerEmail.trim(),
+
+            phone: customerPhone.trim()
+
+        };
+
+        try {
+
+            if (editingCustomerId) {
+
+                await updateCustomer(
+                    editingCustomerId,
+                    customerData
+                );
+
+            } else {
+
+                await createCustomer(
+                    customerData
+                );
+
+            }
+
+            resetCustomerForm();
+
+            await loadCustomers();
+
+        } catch (error) {
+
+            console.error(
+                "Error saving customer:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to save customer"
+            );
+
+        }
+
+    };
+
+
+    const handleCustomerEdit = (customer) => {
+
+        setEditingCustomerId(
+            customer.userId
+        );
+
+        setCustomerFirstName(
+            customer.firstName || ""
+        );
+
+        setCustomerLastName(
+            customer.lastName || ""
+        );
+
+        setCustomerEmail(
+            customer.email || ""
+        );
+
+        setCustomerPhone(
+            customer.phone || ""
+        );
+
+        setActivePage("customers");
+
+    };
+
+
+    const handleCustomerDeactivate = async (customer) => {
+
+        const confirmed = window.confirm(
+            `Are you sure you want to deactivate ${customer.firstName} ${customer.lastName}?`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+
+            await deactivateCustomer(
+                customer.userId
+            );
+
+            await loadCustomers();
+
+        } catch (error) {
+
+            console.error(
+                "Error deactivating customer:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to deactivate customer"
+            );
+
+        }
+
+    };
+
 
     // ============================================================
     // RENDER
@@ -914,6 +1172,19 @@ function App() {
                         }
                     >
                         Orders
+                    </button>
+
+                    <button
+                        onClick={() =>
+                            setActivePage("customers")
+                        }
+                        className={
+                            activePage === "customers"
+                                ? "nav-btn active"
+                                : "nav-btn"
+                        }
+                    >
+                        Customers
                     </button>
 
                 </div>
@@ -2019,6 +2290,366 @@ function App() {
                     </>
 
                 )}
+
+
+                {/* ================================================== */}
+                {/* CUSTOMER PAGE */}
+                {/* ================================================== */}
+
+                {activePage === "customers" && (
+
+                    <>
+
+                        <section className="form-card">
+
+                            <h2>
+                                {
+                                    editingCustomerId
+                                        ? "Update Customer"
+                                        : "Add Customer"
+                                }
+                            </h2>
+
+                            <form
+                                onSubmit={handleCustomerSubmit}
+                            >
+
+                                <div className="form-row">
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            First Name
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            value={customerFirstName}
+                                            onChange={(e) =>
+                                                setCustomerFirstName(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter first name"
+                                        />
+
+                                    </div>
+
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Last Name
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            value={customerLastName}
+                                            onChange={(e) =>
+                                                setCustomerLastName(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter last name"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+
+                                <div className="form-row">
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Email
+                                        </label>
+
+                                        <input
+                                            type="email"
+                                            value={customerEmail}
+                                            onChange={(e) =>
+                                                setCustomerEmail(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter email"
+                                        />
+
+                                    </div>
+
+
+                                    <div className="form-group">
+
+                                        <label>
+                                            Phone
+                                        </label>
+
+                                        <input
+                                            type="text"
+                                            value={customerPhone}
+                                            onChange={(e) =>
+                                                setCustomerPhone(
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="Enter phone number"
+                                            maxLength="15"
+                                        />
+
+                                    </div>
+
+                                </div>
+
+
+                                <div className="form-actions">
+
+                                    <button type="submit">
+
+                                        {
+                                            editingCustomerId
+                                                ? "Update Customer"
+                                                : "Add Customer"
+                                        }
+
+                                    </button>
+
+
+                                    {editingCustomerId && (
+
+                                        <button
+                                            type="button"
+                                            className="cancel-btn"
+                                            onClick={resetCustomerForm}
+                                        >
+                                            Cancel
+                                        </button>
+
+                                    )}
+
+                                </div>
+
+                            </form>
+
+                        </section>
+
+
+                        <section className="table-card">
+
+                            <div className="table-header">
+
+                                <div>
+
+                                    <h2>
+                                        Customers
+                                    </h2>
+
+                                    <p>
+                                        Manage customer accounts and details
+                                    </p>
+
+                                </div>
+
+
+                                <span className="count">
+
+                                    {customers.length} Customers
+
+                                </span>
+
+                            </div>
+
+
+                            <div className="table-container">
+
+                                {loadingCustomers ? (
+
+                                    <p className="empty">
+                                        Loading customers...
+                                    </p>
+
+                                ) : customers.length === 0 ? (
+
+                                    <p className="empty">
+                                        No customers found
+                                    </p>
+
+                                ) : (
+
+                                    <table>
+
+                                        <thead>
+
+                                            <tr>
+
+                                                <th>
+                                                    ID
+                                                </th>
+
+                                                <th>
+                                                    Customer
+                                                </th>
+
+                                                <th>
+                                                    Email
+                                                </th>
+
+                                                <th>
+                                                    Phone
+                                                </th>
+
+                                                <th>
+                                                    Status
+                                                </th>
+
+                                                <th>
+                                                    Created
+                                                </th>
+
+                                                <th>
+                                                    Actions
+                                                </th>
+
+                                            </tr>
+
+                                        </thead>
+
+
+                                        <tbody>
+
+                                            {customers.map(
+                                                (customer) => (
+
+                                                    <tr
+                                                        key={
+                                                            customer.userId
+                                                        }
+                                                    >
+
+                                                        <td>
+                                                            {
+                                                                customer.userId
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            <strong>
+
+                                                                {
+                                                                    customer.firstName
+                                                                }{" "}
+
+                                                                {
+                                                                    customer.lastName
+                                                                }
+
+                                                            </strong>
+
+                                                        </td>
+
+
+                                                        <td>
+                                                            {
+                                                                customer.email
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+                                                            {
+                                                                customer.phone ||
+                                                                "-"
+                                                            }
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            <span
+                                                                className={
+                                                                    customer.status
+                                                                        ? "status active"
+                                                                        : "status inactive"
+                                                                }
+                                                            >
+
+                                                                {
+                                                                    customer.status
+                                                                        ? "Active"
+                                                                        : "Inactive"
+                                                                }
+
+                                                            </span>
+
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            {
+                                                                customer.createdAt
+                                                                    ? new Date(
+                                                                        customer.createdAt
+                                                                    ).toLocaleString()
+                                                                    : "-"
+                                                            }
+
+                                                        </td>
+
+
+                                                        <td>
+
+                                                            <button
+                                                                className="edit-btn"
+                                                                onClick={() =>
+                                                                    handleCustomerEdit(
+                                                                        customer
+                                                                    )
+                                                                }
+                                                            >
+                                                                Edit
+                                                            </button>
+
+
+                                                            {customer.status && (
+
+                                                                <button
+                                                                    className="delete-btn"
+                                                                    onClick={() =>
+                                                                        handleCustomerDeactivate(
+                                                                            customer
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Deactivate
+                                                                </button>
+
+                                                            )}
+
+                                                        </td>
+
+                                                    </tr>
+
+                                                )
+                                            )}
+
+                                        </tbody>
+
+                                    </table>
+
+                                )}
+
+                            </div>
+
+                        </section>
+
+                    </>
+
+                )}
+
 
             </main>
 
