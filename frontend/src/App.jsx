@@ -29,6 +29,14 @@ import {
     cancelOrder
 } from "./api/orderApi";
 
+import {
+    getPayments,
+    getPaymentsByStatus,
+    createPayment,
+    updatePaymentStatus,
+    refundPayment
+} from "./api/paymentApi";
+
 
 function App() {
 
@@ -89,6 +97,25 @@ function App() {
     const [editingCustomerId, setEditingCustomerId] = useState(null);
 
     const [loadingCustomers, setLoadingCustomers] = useState(false);
+
+
+    // ============================================================
+    // PAYMENT STATE
+    // ============================================================
+
+    const [payments, setPayments] = useState([]);
+
+    const [paymentFilter, setPaymentFilter] = useState("ALL");
+
+    const [paymentOrderId, setPaymentOrderId] = useState("");
+
+    const [paymentAmount, setPaymentAmount] = useState("");
+
+    const [paymentMethod, setPaymentMethod] = useState("");
+
+    const [creatingPayment, setCreatingPayment] = useState(false);
+
+    const [loadingPayments, setLoadingPayments] = useState(false);
 
 
     // ============================================================
@@ -403,6 +430,59 @@ function App() {
 
         }
 
+        if (activePage === "payments") {
+
+        try {
+
+            setLoadingPayments(true);
+
+            let response;
+
+            if (paymentFilter === "ALL") {
+
+                response = await getPayments();
+
+            } else {
+
+                response = await getPaymentsByStatus(
+                    paymentFilter
+                );
+
+            }
+
+            if (!cancelled) {
+
+                setPayments(
+                    Array.isArray(response.data)
+                        ? response.data
+                        : []
+                );
+
+            }
+
+        } catch (error) {
+
+            if (!cancelled) {
+
+                console.error(
+                    "Error loading payments:",
+                    error
+                );
+
+            }
+
+        } finally {
+
+            if (!cancelled) {
+
+                setLoadingPayments(false);
+
+            }
+
+        }
+
+    }
+
         };
 
         fetchPageData();
@@ -413,7 +493,7 @@ function App() {
 
         };
 
-    }, [activePage, orderFilter]);
+    }, [activePage, orderFilter, paymentFilter]);
 
 
     // ============================================================
@@ -1118,6 +1198,215 @@ function App() {
 
 
     // ============================================================
+    // PAYMENT FUNCTIONS
+    // ============================================================
+
+    const loadPayments = async () => {
+
+        try {
+
+            setLoadingPayments(true);
+
+            let response;
+
+            if (paymentFilter === "ALL") {
+
+                response = await getPayments();
+
+            } else {
+
+                response = await getPaymentsByStatus(
+                    paymentFilter
+                );
+
+            }
+
+            setPayments(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading payments:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to load payments"
+            );
+
+        } finally {
+
+            setLoadingPayments(false);
+
+        }
+
+    };
+
+
+    const resetPaymentForm = () => {
+
+        setPaymentOrderId("");
+
+        setPaymentAmount("");
+
+        setPaymentMethod("");
+
+    };
+
+
+    const handlePaymentSubmit = async (e) => {
+
+        e.preventDefault();
+
+        if (
+            !paymentOrderId ||
+            Number(paymentOrderId) <= 0
+        ) {
+
+            alert("Order ID must be greater than 0");
+
+            return;
+
+        }
+
+        if (
+            paymentAmount === "" ||
+            Number(paymentAmount) <= 0
+        ) {
+
+            alert("Amount must be greater than 0");
+
+            return;
+
+        }
+
+        if (!paymentMethod) {
+
+            alert("Please select a payment method");
+
+            return;
+
+        }
+
+        const paymentData = {
+
+            orderId: Number(paymentOrderId),
+
+            amount: Number(paymentAmount),
+
+            paymentMethod: paymentMethod,
+
+            paymentStatus: "Paid"
+
+        };
+
+        try {
+
+            setCreatingPayment(true);
+
+            await createPayment(paymentData);
+
+            alert("Payment created successfully");
+
+            resetPaymentForm();
+
+            await loadPayments();
+
+        } catch (error) {
+
+            console.error(
+                "Error creating payment:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to create payment"
+            );
+
+        } finally {
+
+            setCreatingPayment(false);
+
+        }
+
+    };
+
+
+    const handlePaymentStatusUpdate = async (
+        paymentId,
+        paymentStatus
+    ) => {
+
+        try {
+
+            await updatePaymentStatus(
+                paymentId,
+                paymentStatus
+            );
+
+            await loadPayments();
+
+        } catch (error) {
+
+            console.error(
+                "Error updating payment status:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to update payment status"
+            );
+
+        }
+
+    };
+
+
+    const handleRefundPayment = async (payment) => {
+
+        const confirmed = window.confirm(
+            `Are you sure you want to refund payment #${payment.paymentId}?`
+        );
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+        try {
+
+            await refundPayment(
+                payment.paymentId
+            );
+
+            await loadPayments();
+
+        } catch (error) {
+
+            console.error(
+                "Error refunding payment:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to refund payment"
+            );
+
+        }
+
+    };
+
+
+    // ============================================================
     // RENDER
     // ============================================================
 
@@ -1186,6 +1475,19 @@ function App() {
                     >
                         Customers
                     </button>
+
+                    <button
+                    onClick={() =>
+                        setActivePage("payments")
+                    }
+                    className={
+                        activePage === "payments"
+                            ? "nav-btn active"
+                            : "nav-btn"
+                    }
+                >
+                    Payments
+                </button>
 
                 </div>
 
@@ -2649,6 +2951,406 @@ function App() {
                     </>
 
                 )}
+
+                {activePage === "payments" && (
+
+                <>
+
+                    {/* CREATE PAYMENT */}
+
+                    <section className="form-card">
+
+                        <h2>
+                            Create Payment
+                        </h2>
+
+                        <form onSubmit={handlePaymentSubmit}>
+
+                            <div className="form-row">
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Order ID
+                                    </label>
+
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={paymentOrderId}
+                                        onChange={(e) =>
+                                            setPaymentOrderId(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter order ID"
+                                    />
+
+                                </div>
+
+
+                                <div className="form-group">
+
+                                    <label>
+                                        Amount
+                                    </label>
+
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={paymentAmount}
+                                        onChange={(e) =>
+                                            setPaymentAmount(
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="Enter payment amount"
+                                    />
+
+                                </div>
+
+                            </div>
+
+
+                            <div className="form-group">
+
+                                <label>
+                                    Payment Method
+                                </label>
+
+                                <select
+                                    value={paymentMethod}
+                                    onChange={(e) =>
+                                        setPaymentMethod(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+
+                                    <option value="">
+                                        Select Payment Method
+                                    </option>
+
+                                    <option value="Credit Card">
+                                        Credit Card
+                                    </option>
+
+                                    <option value="Debit Card">
+                                        Debit Card
+                                    </option>
+
+                                    <option value="UPI">
+                                        UPI
+                                    </option>
+
+                                    <option value="PayPal">
+                                        PayPal
+                                    </option>
+
+                                    <option value="Bank Transfer">
+                                        Bank Transfer
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+
+                            <div className="form-actions">
+
+                                <button
+                                    type="submit"
+                                    disabled={creatingPayment}
+                                >
+
+                                    {
+                                        creatingPayment
+                                            ? "Processing..."
+                                            : "Process Payment"
+                                    }
+
+                                </button>
+
+
+                                <button
+                                    type="button"
+                                    className="cancel-btn"
+                                    onClick={resetPaymentForm}
+                                >
+                                    Clear
+                                </button>
+
+                            </div>
+
+                        </form>
+
+                    </section>
+
+
+                    {/* PAYMENT DASHBOARD */}
+
+                    <section className="table-card">
+
+                        <div className="table-header">
+
+                            <div>
+
+                                <h2>
+                                    Payments
+                                </h2>
+
+                                <p>
+                                    Manage payment transactions
+                                </p>
+
+                            </div>
+
+
+                            <div>
+
+                                <select
+                                    value={paymentFilter}
+                                    onChange={(e) =>
+                                        setPaymentFilter(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+
+                                    <option value="ALL">
+                                        All Payments
+                                    </option>
+
+                                    <option value="Paid">
+                                        Paid
+                                    </option>
+
+                                    <option value="Failed">
+                                        Failed
+                                    </option>
+
+                                    <option value="Refunded">
+                                        Refunded
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="table-container">
+
+                            {loadingPayments ? (
+
+                                <p className="empty">
+                                    Loading payments...
+                                </p>
+
+                            ) : payments.length === 0 ? (
+
+                                <p className="empty">
+                                    No payments found
+                                </p>
+
+                            ) : (
+
+                                <table>
+
+                                    <thead>
+
+                                        <tr>
+
+                                            <th>
+                                                Payment ID
+                                            </th>
+
+                                            <th>
+                                                Order ID
+                                            </th>
+
+                                            <th>
+                                                Amount
+                                            </th>
+
+                                            <th>
+                                                Payment Method
+                                            </th>
+
+                                            <th>
+                                                Status
+                                            </th>
+
+                                            <th>
+                                                Created
+                                            </th>
+
+                                            <th>
+                                                Actions
+                                            </th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody>
+
+                                        {payments.map(
+                                            (payment) => (
+
+                                                <tr
+                                                    key={
+                                                        payment.paymentId
+                                                    }
+                                                >
+
+                                                    <td>
+                                                        #
+                                                        {
+                                                            payment.paymentId
+                                                        }
+                                                    </td>
+
+
+                                                    <td>
+                                                        #
+                                                        {
+                                                            payment.orderId
+                                                        }
+                                                    </td>
+
+
+                                                    <td>
+                                                        ₹
+                                                        {
+                                                            Number(
+                                                                payment.amount || 0
+                                                            ).toFixed(2)
+                                                        }
+                                                    </td>
+
+
+                                                    <td>
+                                                        {
+                                                            payment.paymentMethod
+                                                        }
+                                                    </td>
+
+
+                                                    <td>
+
+                                                        <span
+                                                            className={
+                                                                String(
+                                                                    payment.paymentStatus
+                                                                ).toUpperCase() ===
+                                                                "REFUNDED"
+                                                                    ? "status inactive"
+                                                                    : "status active"
+                                                            }
+                                                        >
+                                                            {
+                                                                payment.paymentStatus
+                                                            }
+                                                        </span>
+
+                                                    </td>
+
+
+                                                    <td>
+
+                                                        {
+                                                            payment.createdAt
+                                                                ? new Date(
+                                                                    payment.createdAt
+                                                                ).toLocaleString()
+                                                                : "-"
+                                                        }
+
+                                                    </td>
+
+
+                                                    <td>
+
+                                                        {
+                                                            String(
+                                                                payment.paymentStatus
+                                                            ).toUpperCase() !==
+                                                            "REFUNDED" && (
+
+                                                                <select
+                                                                    value={
+                                                                        payment.paymentStatus
+                                                                    }
+                                                                    onChange={(e) =>
+                                                                        handlePaymentStatusUpdate(
+                                                                            payment.paymentId,
+                                                                            e.target.value
+                                                                        )
+                                                                    }
+                                                                >
+
+                                                                    <option value="Paid">
+                                                                        Paid
+                                                                    </option>
+
+                                                                    <option value="Failed">
+                                                                        Failed
+                                                                    </option>
+
+                                                                    <option value="Refunded">
+                                                                        Refunded
+                                                                    </option>
+
+                                                                </select>
+
+                                                            )
+                                                        }
+
+
+                                                        {
+                                                            String(
+                                                                payment.paymentStatus
+                                                            ).toUpperCase() ===
+                                                            "PAID" && (
+
+                                                                <button
+                                                                    className="delete-btn"
+                                                                    onClick={() =>
+                                                                        handleRefundPayment(
+                                                                            payment
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Refund
+                                                                </button>
+
+                                                            )
+                                                        }
+
+                                                    </td>
+
+                                                </tr>
+
+                                            )
+                                        )}
+
+                                    </tbody>
+
+                                </table>
+
+                            )}
+
+                        </div>
+
+                    </section>
+
+                </>
+
+            )}
 
 
             </main>
