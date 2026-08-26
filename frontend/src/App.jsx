@@ -37,6 +37,14 @@ import {
     refundPayment
 } from "./api/paymentApi";
 
+import {
+    getAllCartItems,
+    getCartByCustomerId,
+    addToCart,
+    updateCartQuantity,
+    removeCartItem
+} from "./api/cartApi";
+
 
 function App() {
 
@@ -116,6 +124,24 @@ function App() {
     const [creatingPayment, setCreatingPayment] = useState(false);
 
     const [loadingPayments, setLoadingPayments] = useState(false);
+
+    // ============================================================
+    // CART STATE
+    // ============================================================
+
+    const [cartItems, setCartItems] = useState([]);
+
+    const [cartCustomerId, setCartCustomerId] = useState("");
+
+    const [cartProductId, setCartProductId] = useState("");
+
+    const [cartQuantity, setCartQuantity] = useState(1);
+
+    const [cartCustomerFilter, setCartCustomerFilter] = useState("ALL");
+
+    const [loadingCart, setLoadingCart] = useState(false);
+
+    const [addingToCart, setAddingToCart] = useState(false);
 
 
     // ============================================================
@@ -482,6 +508,8 @@ function App() {
         }
 
     }
+
+
 
         };
 
@@ -1405,6 +1433,262 @@ function App() {
 
     };
 
+    // ============================================================
+    // CART FUNCTIONS
+    // ============================================================
+
+    const loadCartItems = async () => {
+
+        try {
+
+            setLoadingCart(true);
+
+            let response;
+
+            if (
+                cartCustomerFilter === "ALL" ||
+                cartCustomerFilter === ""
+            ) {
+
+                response = await getAllCartItems();
+
+            } else {
+
+                response = await getCartByCustomerId(
+                    Number(cartCustomerFilter)
+                );
+
+            }
+
+            setCartItems(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading cart items:",
+                error
+            );
+
+            setCartItems([]);
+
+        } finally {
+
+            setLoadingCart(false);
+
+        }
+
+    };
+
+
+    const resetCartForm = () => {
+
+        setCartCustomerId("");
+
+        setCartProductId("");
+
+        setCartQuantity(1);
+
+    };
+
+
+    const handleAddToCart = async (e) => {
+
+        e.preventDefault();
+
+        if (
+            !cartCustomerId ||
+            Number(cartCustomerId) <= 0
+        ) {
+
+            alert("Please select a customer");
+
+            return;
+
+        }
+
+        if (
+            !cartProductId ||
+            Number(cartProductId) <= 0
+        ) {
+
+            alert("Please select a product");
+
+            return;
+
+        }
+
+        if (
+            !cartQuantity ||
+            Number(cartQuantity) <= 0
+        ) {
+
+            alert(
+                "Quantity must be greater than 0"
+            );
+
+            return;
+
+        }
+
+        try {
+
+            setAddingToCart(true);
+
+            await addToCart(
+                Number(cartCustomerId),
+                Number(cartProductId),
+                Number(cartQuantity)
+            );
+
+            alert(
+                "Product added to cart successfully"
+            );
+
+            resetCartForm();
+
+            await loadCartItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error adding product to cart:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to add product to cart"
+            );
+
+        } finally {
+
+            setAddingToCart(false);
+
+        }
+
+    };
+
+
+    const handleUpdateCartQuantity = async (
+        cartId,
+        quantity
+    ) => {
+
+        if (
+            !quantity ||
+            Number(quantity) <= 0
+        ) {
+
+            alert(
+                "Quantity must be greater than 0"
+            );
+
+            return;
+
+        }
+
+        try {
+
+            await updateCartQuantity(
+                cartId,
+                Number(quantity)
+            );
+
+            await loadCartItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error updating cart quantity:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to update cart quantity"
+            );
+
+        }
+
+    };
+
+
+    const handleRemoveCartItem = async (
+        cartId
+    ) => {
+
+        const confirmed = window.confirm(
+            "Are you sure you want to remove this item from the cart?"
+        );
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+        try {
+
+            await removeCartItem(cartId);
+
+            alert(
+                "Cart item removed successfully"
+            );
+
+            await loadCartItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error removing cart item:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to remove cart item"
+            );
+
+        }
+
+    };
+
+    useEffect(() => {
+
+    const loadCartData = async () => {
+
+        try {
+
+            await Promise.all([
+                loadCustomers(),
+                loadProducts()
+            ]);
+
+        } catch (error) {
+
+            console.error(
+                "Error loading cart data:",
+                error
+            );
+
+        }
+
+    };
+
+        if (activePage === "cart") {
+
+            loadCartData();
+
+        }
+
+    }, [activePage]);
 
     // ============================================================
     // RENDER
@@ -1488,6 +1772,37 @@ function App() {
                 >
                     Payments
                 </button>
+
+                <button
+                onClick={async () => {
+
+                    setActivePage("cart");
+
+                    try {
+
+                        await Promise.all([
+                            loadCustomers(),
+                            loadProducts()
+                        ]);
+
+                    } catch (error) {
+
+                        console.error(
+                            "Error loading Cart data:",
+                            error
+                        );
+
+                    }
+
+                }}
+                className={
+                    activePage === "cart"
+                        ? "nav-btn active"
+                        : "nav-btn"
+                }
+            >
+                Cart
+            </button>
 
                 </div>
 
@@ -3351,6 +3666,396 @@ function App() {
                 </>
 
             )}
+
+            {activePage === "cart" && (
+
+    <>
+
+        {/* ADD TO CART */}
+
+        <section className="form-card">
+
+            <h2>Add Product to Cart</h2>
+
+            <form onSubmit={handleAddToCart}>
+
+                <div className="form-row">
+
+                    {/* CUSTOMER */}
+
+                    <div className="form-group">
+
+                        <label>Customer</label>
+
+                        <select
+                            value={cartCustomerId}
+                            onChange={(e) =>
+                                setCartCustomerId(e.target.value)
+                            }
+                        >
+
+                            <option value="">
+                                Select Customer
+                            </option>
+
+                            {customers.map((customer) => (
+
+                                <option
+                                    key={customer.userId}
+                                    value={customer.userId}
+                                >
+                                    {customer.firstName}{" "}
+                                    {customer.lastName}
+                                </option>
+
+                            ))}
+
+                        </select>
+
+                    </div>
+
+
+                    {/* PRODUCT */}
+
+                    <div className="form-group">
+
+                        <label>Product</label>
+
+                        <select
+                            value={cartProductId}
+                            onChange={(e) =>
+                                setCartProductId(e.target.value)
+                            }
+                        >
+
+                            <option value="">
+                                Select Product
+                            </option>
+
+                            {products
+                                .filter(
+                                    (product) =>
+                                        product.status === true &&
+                                        product.inventoryCount > 0
+                                )
+                                .map((product) => (
+
+                                    <option
+                                        key={product.productId}
+                                        value={product.productId}
+                                    >
+
+                                        {product.productName}
+                                        {" - ₹"}
+                                        {product.price}
+                                        {" (Stock: "}
+                                        {product.inventoryCount}
+                                        {")"}
+
+                                    </option>
+
+                                ))}
+
+                        </select>
+
+                    </div>
+
+
+                    {/* QUANTITY */}
+
+                    <div className="form-group">
+
+                        <label>Quantity</label>
+
+                        <input
+                            type="number"
+                            min="1"
+                            value={cartQuantity}
+                            onChange={(e) =>
+                                setCartQuantity(e.target.value)
+                            }
+                        />
+
+                    </div>
+
+                </div>
+
+
+                <div className="form-actions">
+
+                    <button
+                        type="submit"
+                        disabled={addingToCart}
+                    >
+
+                        {addingToCart
+                            ? "Adding..."
+                            : "Add to Cart"}
+
+                    </button>
+
+
+                    <button
+                        type="button"
+                        className="cancel-btn"
+                        onClick={resetCartForm}
+                    >
+                        Clear
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+
+        {/* CART DASHBOARD */}
+
+        <section className="table-card">
+
+            <div className="table-header">
+
+                <div>
+
+                    <h2>Cart Management</h2>
+
+                    <p>
+                        View and manage customer cart items
+                    </p>
+
+                </div>
+
+
+                {/* Refresh Button */}
+
+                <button
+                    onClick={loadCartItems}
+                >
+                    Refresh
+                </button>
+
+
+                {/* CUSTOMER FILTER */}
+
+                <select
+                    value={cartCustomerFilter}
+                    onChange={(e) =>
+                        setCartCustomerFilter(e.target.value)
+                    }
+                >
+
+                    <option value="ALL">
+                        All Customers
+                    </option>
+
+                    {customers.map((customer) => (
+
+                        <option
+                            key={customer.userId}
+                            value={customer.userId}
+                        >
+
+                            {customer.firstName}{" "}
+                            {customer.lastName}
+
+                        </option>
+
+                    ))}
+
+                </select>
+
+            </div>
+
+
+            <div className="table-container">
+
+                {loadingCart ? (
+
+                    <p className="empty">
+                        Loading cart items...
+                    </p>
+
+                ) : cartItems.length === 0 ? (
+
+                    <p className="empty">
+                        No cart items found
+                    </p>
+
+                ) : (
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>Cart ID</th>
+                                <th>Customer</th>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Total Price</th>
+                                <th>Created At</th>
+                                <th>Actions</th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {cartItems.map((cart) => {
+
+                                const customer =
+                                    customers.find(
+                                        (item) =>
+                                            item.userId ===
+                                            cart.customerId
+                                    );
+
+                                const product =
+                                    products.find(
+                                        (item) =>
+                                            item.productId ===
+                                            cart.productId
+                                    );
+
+                                return (
+
+                                    <tr key={cart.cartId}>
+
+                                        <td>
+                                            #{cart.cartId}
+                                        </td>
+
+
+                                        <td>
+
+                                            {customer
+                                                ? `${customer.firstName} ${customer.lastName}`
+                                                : `Customer #${cart.customerId}`}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {product
+                                                ? product.productName
+                                                : `Product #${cart.productId}`}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max={
+                                                    product
+                                                        ? product.inventoryCount
+                                                        : undefined
+                                                }
+                                                value={cart.quantity}
+                                                onChange={(e) =>
+                                                    handleUpdateCartQuantity(
+                                                        cart.cartId,
+                                                        e.target.value
+                                                    )
+                                                }
+                                                style={{
+                                                    width: "70px"
+                                                }}
+                                            />
+
+                                        </td>
+
+
+                                        <td>
+
+                                            ₹
+                                            {Number(
+                                                cart.totalPrice || 0
+                                            ).toFixed(2)}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            {cart.createdAt
+                                                ? new Date(
+                                                    cart.createdAt
+                                                ).toLocaleString()
+                                                : "-"}
+
+                                        </td>
+
+
+                                        <td>
+
+                                            <button
+                                                className="delete-btn"
+                                                onClick={() =>
+                                                    handleRemoveCartItem(
+                                                        cart.cartId
+                                                    )
+                                                }
+                                            >
+                                                Remove
+                                            </button>
+
+                                        </td>
+
+                                    </tr>
+
+                                );
+
+                            })}
+
+                        </tbody>
+
+                    </table>
+
+                )}
+
+            </div>
+
+
+            {/* TOTAL CART VALUE */}
+
+            {cartItems.length > 0 && (
+
+                <div
+                    style={{
+                        marginTop: "20px",
+                        fontSize: "18px",
+                        fontWeight: "600"
+                    }}
+                >
+
+                    Total Cart Value: ₹
+
+                    {cartItems
+                        .reduce(
+                            (total, item) =>
+                                total +
+                                Number(item.totalPrice || 0),
+                            0
+                        )
+                        .toFixed(2)}
+
+                </div>
+
+            )}
+
+        </section>
+
+    </>
+
+)}
 
 
             </main>
