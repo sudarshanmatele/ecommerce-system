@@ -45,6 +45,14 @@ import {
     removeCartItem
 } from "./api/cartApi";
 
+import {
+    getAllWishlistItems,
+    getWishlistByCustomerId,
+    addToWishlist,
+    removeWishlistItem,
+    moveWishlistToCart
+} from "./api/wishlistApi";
+
 
 function App() {
 
@@ -142,6 +150,27 @@ function App() {
     const [loadingCart, setLoadingCart] = useState(false);
 
     const [addingToCart, setAddingToCart] = useState(false);
+
+    // ============================================================
+    // WISHLIST STATE
+    // ============================================================
+
+    const [wishlistItems, setWishlistItems] = useState([]);
+
+    const [wishlistCustomerId, setWishlistCustomerId] = useState("");
+
+    const [wishlistProductId, setWishlistProductId] = useState("");
+
+    const [wishlistCustomerFilter, setWishlistCustomerFilter] =
+        useState("ALL");
+
+    const [loadingWishlist, setLoadingWishlist] =
+        useState(false);
+
+    const [addingToWishlist, setAddingToWishlist] =
+        useState(false);
+
+    const [moveQuantity] = useState(1);
 
 
     // ============================================================
@@ -317,7 +346,7 @@ function App() {
 
         const fetchPageData = async () => {
 
-            if (activePage === "products") {
+            if (activePage === "products" || activePage === "wishlist") {
 
                 try {
 
@@ -415,7 +444,7 @@ function App() {
 
             // ---------------- CUSTOMERS ----------------
 
-        if (activePage === "customers") {
+        if (activePage === "customers" || activePage === "wishlist") {
 
             try {
 
@@ -1682,13 +1711,237 @@ function App() {
 
     };
 
-        if (activePage === "cart") {
 
-            loadCartData();
+    if (activePage === "cart") {
+
+        loadCartData();
+
+    }
+
+    }, [activePage]);
+
+    // ============================================================
+    // WISHLIST FUNCTIONS
+    // ============================================================
+
+    const loadWishlistItems = async () => {
+
+        try {
+
+            setLoadingWishlist(true);
+
+            let response;
+
+            if (
+                wishlistCustomerFilter === "ALL" ||
+                wishlistCustomerFilter === ""
+            ) {
+
+                response =
+                    await getAllWishlistItems();
+
+            } else {
+
+                response =
+                    await getWishlistByCustomerId(
+                        Number(wishlistCustomerFilter)
+                    );
+
+            }
+
+            setWishlistItems(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading wishlist:",
+                error
+            );
+
+            setWishlistItems([]);
+
+        } finally {
+
+            setLoadingWishlist(false);
 
         }
 
-    }, [activePage]);
+    };
+
+
+    const resetWishlistForm = () => {
+
+        setWishlistCustomerId("");
+
+        setWishlistProductId("");
+
+    };
+
+
+    const handleAddToWishlist = async (e) => {
+
+        e.preventDefault();
+
+        if (!wishlistCustomerId) {
+
+            alert("Please select a customer");
+
+            return;
+
+        }
+
+        if (!wishlistProductId) {
+
+            alert("Please select a product");
+
+            return;
+
+        }
+
+        try {
+
+            setAddingToWishlist(true);
+
+            await addToWishlist(
+                Number(wishlistCustomerId),
+                Number(wishlistProductId)
+            );
+
+            alert(
+                "Product added to wishlist successfully"
+            );
+
+            resetWishlistForm();
+
+            await loadWishlistItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error adding to wishlist:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to add product to wishlist"
+            );
+
+        } finally {
+
+            setAddingToWishlist(false);
+
+        }
+
+    };
+
+
+    const handleRemoveWishlistItem = async (
+        wishlistId
+    ) => {
+
+        const confirmed = window.confirm(
+            "Are you sure you want to remove this item from the wishlist?"
+        );
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+        try {
+
+            await removeWishlistItem(wishlistId);
+
+            alert(
+                "Wishlist item removed successfully"
+            );
+
+            await loadWishlistItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error removing wishlist item:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to remove wishlist item"
+            );
+
+        }
+
+    };
+
+
+    const handleMoveToCart = async (
+        wishlistId
+    ) => {
+
+        const quantity = window.prompt(
+            "Enter quantity to move to cart:",
+            moveQuantity
+        );
+
+        if (
+            quantity === null
+        ) {
+
+            return;
+
+        }
+
+        if (
+            !quantity ||
+            Number(quantity) <= 0
+        ) {
+
+            alert(
+                "Quantity must be greater than 0"
+            );
+
+            return;
+
+        }
+
+        try {
+
+            await moveWishlistToCart(
+                wishlistId,
+                Number(quantity)
+            );
+
+            alert(
+                "Product moved to cart successfully"
+            );
+
+            await loadWishlistItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error moving product to cart:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to move product to cart"
+            );
+
+        }
+
+    };
 
     // ============================================================
     // RENDER
@@ -1772,6 +2025,19 @@ function App() {
                 >
                     Payments
                 </button>
+
+                <button
+                onClick={() =>
+                    setActivePage("wishlist")
+                }
+                className={
+                    activePage === "wishlist"
+                        ? "nav-btn active"
+                        : "nav-btn"
+                }
+            >
+                Wishlist
+            </button>
 
                 <button
                 onClick={async () => {
@@ -4057,13 +4323,390 @@ function App() {
 
 )}
 
+        {activePage === "wishlist" && (
+
+        <>
+
+            {/* ADD TO WISHLIST */}
+
+            <section className="form-card">
+
+                <h2>Add Product to Wishlist</h2>
+
+                <form
+                    onSubmit={handleAddToWishlist}
+                >
+
+                    <div className="form-row">
+
+                        <div className="form-group">
+
+                            <label>Customer</label>
+
+                            <select
+                                value={wishlistCustomerId}
+                                onChange={(e) =>
+                                    setWishlistCustomerId(
+                                        e.target.value
+                                    )
+                                }
+                            >
+
+                                <option value="">
+                                    Select Customer
+                                </option>
+
+                                {customers.map(
+                                    (customer) => (
+
+                                        <option
+                                            key={
+                                                customer.userId
+                                            }
+                                            value={
+                                                customer.userId
+                                            }
+                                        >
+
+                                            {customer.firstName}{" "}
+                                            {customer.lastName}
+
+                                        </option>
+
+                                    )
+                                )}
+
+                            </select>
+
+                        </div>
+
+
+                        <div className="form-group">
+
+                            <label>Product</label>
+
+                            <select
+                                value={wishlistProductId}
+                                onChange={(e) =>
+                                    setWishlistProductId(
+                                        e.target.value
+                                    )
+                                }
+                            >
+
+                                <option value="">
+                                    Select Product
+                                </option>
+
+                                {products
+                                    .filter(
+                                        (product) =>
+                                            product.status === true
+                                    )
+                                    .map(
+                                        (product) => (
+
+                                            <option
+                                                key={
+                                                    product.productId
+                                                }
+                                                value={
+                                                    product.productId
+                                                }
+                                            >
+
+                                                {product.productName}
+                                                {" - ₹"}
+                                                {product.price}
+
+                                            </option>
+
+                                        )
+                                    )}
+
+                            </select>
+
+                        </div>
+
+                    </div>
+
+
+                    <div className="form-actions">
+
+                        <button
+                            type="submit"
+                            disabled={
+                                addingToWishlist
+                            }
+                        >
+
+                            {
+                                addingToWishlist
+                                    ? "Adding..."
+                                    : "Add to Wishlist"
+                            }
+
+                        </button>
+
+
+                        <button
+                            type="button"
+                            className="cancel-btn"
+                            onClick={resetWishlistForm}
+                        >
+                            Clear
+                        </button>
+
+                    </div>
+
+                </form>
+
+            </section>
+
+
+            {/* WISHLIST DASHBOARD */}
+
+            <section className="table-card">
+
+                <div className="table-header">
+
+                    <div>
+
+                        <h2>
+                            Wishlist Management
+                        </h2>
+
+                        <p>
+                            View and manage customer wishlist items
+                        </p>
+
+                    </div>
+
+
+                    <button
+                        onClick={loadWishlistItems}
+                    >
+                        Refresh
+                    </button>
+
+
+                    <select
+                        value={
+                            wishlistCustomerFilter
+                        }
+                        onChange={(e) =>
+                            setWishlistCustomerFilter(
+                                e.target.value
+                            )
+                        }
+                    >
+
+                        <option value="ALL">
+                            All Customers
+                        </option>
+
+                        {customers.map(
+                            (customer) => (
+
+                                <option
+                                    key={
+                                        customer.userId
+                                    }
+                                    value={
+                                        customer.userId
+                                    }
+                                >
+
+                                    {customer.firstName}{" "}
+                                    {customer.lastName}
+
+                                </option>
+
+                            )
+                        )}
+
+                    </select>
+
+                </div>
+
+
+                <div className="table-container">
+
+                    {loadingWishlist ? (
+
+                        <p className="empty">
+                            Loading wishlist items...
+                        </p>
+
+                    ) : wishlistItems.length === 0 ? (
+
+                        <p className="empty">
+                            No wishlist items found
+                        </p>
+
+                    ) : (
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>Wishlist ID</th>
+                                    <th>Customer</th>
+                                    <th>Product</th>
+                                    <th>Price</th>
+                                    <th>Availability</th>
+                                    <th>Created At</th>
+                                    <th>Actions</th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody>
+
+                                {wishlistItems.map(
+                                    (wishlist) => {
+
+                                        const customer =
+                                            wishlist.customer;
+
+                                        const product =
+                                            wishlist.product;
+
+                                        return (
+
+                                            <tr
+                                                key={
+                                                    wishlist.wishlistId
+                                                }
+                                            >
+
+                                                <td>
+                                                    #
+                                                    {
+                                                        wishlist.wishlistId
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    {customer
+                                                        ? `${customer.firstName} ${customer.lastName}`
+                                                        : "-"}
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    {product
+                                                        ? product.productName
+                                                        : "-"}
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    ₹
+                                                    {Number(
+                                                        product?.price || 0
+                                                    ).toFixed(2)}
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <span
+                                                        className={
+                                                            product?.status
+                                                                ? "status active"
+                                                                : "status inactive"
+                                                        }
+                                                    >
+
+                                                        {product?.status
+                                                            ? "Available"
+                                                            : "Unavailable"}
+
+                                                    </span>
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    {
+                                                        wishlist.createdAt
+                                                            ? new Date(
+                                                                wishlist.createdAt
+                                                            ).toLocaleString()
+                                                            : "-"
+                                                    }
+
+                                                </td>
+
+
+                                                <td>
+
+                                                    <button
+                                                        className="edit-btn"
+                                                        onClick={() =>
+                                                            handleMoveToCart(
+                                                                wishlist.wishlistId
+                                                            )
+                                                        }
+                                                    >
+                                                        Move to Cart
+                                                    </button>
+
+
+                                                    <button
+                                                        className="delete-btn"
+                                                        onClick={() =>
+                                                            handleRemoveWishlistItem(
+                                                                wishlist.wishlistId
+                                                            )
+                                                        }
+                                                    >
+                                                        Remove
+                                                    </button>
+
+                                                </td>
+
+                                            </tr>
+
+                                        );
+
+                                    }
+                                )}
+
+                            </tbody>
+
+                        </table>
+
+                    )}
+
+                </div>
+
+            </section>
+
+        </>
+
+        )}
+
+
 
             </main>
 
         </div>
 
     );
-
 }
 
 
