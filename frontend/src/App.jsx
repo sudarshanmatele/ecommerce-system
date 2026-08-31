@@ -62,6 +62,14 @@ import {
     deleteShipping
 } from "./api/shippingApi";
 
+import {
+    getAllReviews,
+    addReview,
+    updateReview,
+    moderateReview,
+    deleteReview
+} from "./api/reviewApi";
+
 
 function App() {
 
@@ -212,6 +220,37 @@ function App() {
         useState(false);
 
     const [savingShipping, setSavingShipping] =
+        useState(false);
+
+
+    // ============================================================
+    // REVIEW STATES
+    // ============================================================
+
+    const [reviews, setReviews] = useState([]);
+
+    const [loadingReviews, setLoadingReviews] =
+        useState(false);
+
+    const [reviewProductId, setReviewProductId] =
+        useState("");
+
+    const [reviewCustomerId, setReviewCustomerId] =
+        useState("");
+
+    const [reviewRating, setReviewRating] =
+        useState(5);
+
+    const [reviewText, setReviewText] =
+        useState("");
+
+    const [editingReviewId, setEditingReviewId] =
+        useState(null);
+
+    const [reviewStatusFilter, setReviewStatusFilter] =
+        useState("ALL");
+
+    const [savingReview, setSavingReview] =
         useState(false);
 
 
@@ -629,6 +668,50 @@ function App() {
                 if (!cancelled) {
 
                     setLoadingShipping(false);
+
+                }
+
+            }
+
+        }
+
+
+        // ---------------- REVIEWS ----------------
+
+        if (activePage === "reviews") {
+
+            try {
+
+                setLoadingReviews(true);
+
+                const response = await getAllReviews();
+
+                if (!cancelled) {
+
+                    setReviews(
+                        Array.isArray(response.data)
+                            ? response.data
+                            : []
+                    );
+
+                }
+
+            } catch (error) {
+
+                if (!cancelled) {
+
+                    console.error(
+                        "Error loading reviews:",
+                        error
+                    );
+
+                }
+
+            } finally {
+
+                if (!cancelled) {
+
+                    setLoadingReviews(false);
 
                 }
 
@@ -2370,6 +2453,245 @@ function App() {
 
 
     // ============================================================
+    // REVIEW FUNCTIONS
+    // ============================================================
+
+    const loadReviews = async () => {
+
+        try {
+
+            setLoadingReviews(true);
+
+            let response;
+
+            if (reviewStatusFilter === "ALL") {
+
+                response = await getAllReviews();
+
+            } else {
+
+                response = await getAllReviews();
+
+            }
+
+            setReviews(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading reviews:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to load reviews"
+            );
+
+        } finally {
+
+            setLoadingReviews(false);
+
+        }
+
+    };
+
+
+    const resetReviewForm = () => {
+
+        setReviewProductId("");
+        setReviewCustomerId("");
+        setReviewRating(5);
+        setReviewText("");
+        setEditingReviewId(null);
+
+    };
+
+
+    const handleReviewSubmit = async (e) => {
+
+        e.preventDefault();
+
+        if (!reviewProductId) {
+
+            alert("Product is required");
+            return;
+
+        }
+
+        if (!reviewCustomerId) {
+
+            alert("Customer is required");
+            return;
+
+        }
+
+        if (
+            !reviewRating ||
+            reviewRating < 1 ||
+            reviewRating > 5
+        ) {
+
+            alert("Rating must be between 1 and 5");
+            return;
+
+        }
+
+        if (!reviewText.trim()) {
+
+            alert("Review text is required");
+            return;
+
+        }
+
+        try {
+
+            setSavingReview(true);
+
+            if (editingReviewId) {
+
+                await updateReview(
+                    editingReviewId,
+                    reviewRating,
+                    reviewText.trim()
+                );
+
+            } else {
+
+                await addReview(
+                    reviewProductId,
+                    reviewCustomerId,
+                    reviewRating,
+                    reviewText.trim()
+                );
+
+            }
+
+            resetReviewForm();
+
+            await loadReviews();
+
+        } catch (error) {
+
+            console.error(
+                "Error saving review:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to save review"
+            );
+
+        } finally {
+
+            setSavingReview(false);
+
+        }
+
+    };
+
+
+    const handleReviewEdit = (review) => {
+
+        setEditingReviewId(
+            review.reviewId
+        );
+
+        setReviewProductId(
+            review.product?.productId || ""
+        );
+
+        setReviewCustomerId(
+            review.customer?.userId || ""
+        );
+
+        setReviewRating(
+            review.rating || 5
+        );
+
+        setReviewText(
+            review.reviewText || ""
+        );
+
+        setActivePage("reviews");
+
+    };
+
+
+    const handleReviewModerate = async (
+        reviewId,
+        status
+    ) => {
+
+        try {
+
+            await moderateReview(
+                reviewId,
+                status
+            );
+
+            await loadReviews();
+
+        } catch (error) {
+
+            console.error(
+                "Error moderating review:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to update review status"
+            );
+
+        }
+
+    };
+
+
+    const handleReviewDelete = async (
+        reviewId
+    ) => {
+
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this review?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+
+            await deleteReview(
+                reviewId
+            );
+
+            await loadReviews();
+
+        } catch (error) {
+
+            console.error(
+                "Error deleting review:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                "Unable to delete review"
+            );
+
+        }
+
+    };
+
+
+    // ============================================================
     // RENDER
     // ============================================================
 
@@ -2507,6 +2829,17 @@ function App() {
                 }
             >
                 Shipping
+            </button>
+
+            <button
+                onClick={() => setActivePage("reviews")}
+                className={
+                    activePage === "reviews"
+                        ? "nav-btn active"
+                        : "nav-btn"
+                }
+            >
+                Reviews
             </button>
 
                 </div>
@@ -5673,6 +6006,482 @@ function App() {
 
                                         )
                                     )}
+
+                                </tbody>
+
+                            </table>
+
+                        )}
+
+                    </div>
+
+                </section>
+
+            </>
+
+        )}
+
+
+        {activePage === "reviews" && (
+
+            <>
+
+                {/* REVIEW FORM */}
+
+                <section className="form-card">
+
+                    <h2>
+                        {editingReviewId
+                            ? "Update Review"
+                            : "Add Review"}
+                    </h2>
+
+                    <form onSubmit={handleReviewSubmit}>
+
+                        <div className="form-row">
+
+                            <div className="form-group">
+
+                                <label>
+                                    Product
+                                </label>
+
+                                <select
+                                    value={reviewProductId}
+                                    onChange={(e) =>
+                                        setReviewProductId(
+                                            e.target.value
+                                        )
+                                    }
+                                    disabled={!!editingReviewId}
+                                >
+
+                                    <option value="">
+                                        Select Product
+                                    </option>
+
+                                    {products.map((product) => (
+
+                                        <option
+                                            key={product.productId}
+                                            value={product.productId}
+                                        >
+                                            {product.productName}
+                                        </option>
+
+                                    ))}
+
+                                </select>
+
+                            </div>
+
+
+                            <div className="form-group">
+
+                                <label>
+                                    Customer
+                                </label>
+
+                                <select
+                                    value={reviewCustomerId}
+                                    onChange={(e) =>
+                                        setReviewCustomerId(
+                                            e.target.value
+                                        )
+                                    }
+                                    disabled={!!editingReviewId}
+                                >
+
+                                    <option value="">
+                                        Select Customer
+                                    </option>
+
+                                    {customers.map((customer) => (
+
+                                        <option
+                                            key={customer.userId}
+                                            value={customer.userId}
+                                        >
+                                            {customer.firstName}{" "}
+                                            {customer.lastName}
+                                        </option>
+
+                                    ))}
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="form-row">
+
+                            <div className="form-group">
+
+                                <label>
+                                    Rating
+                                </label>
+
+                                <select
+                                    value={reviewRating}
+                                    onChange={(e) =>
+                                        setReviewRating(
+                                            Number(e.target.value)
+                                        )
+                                    }
+                                >
+
+                                    <option value={1}>
+                                        1 Star
+                                    </option>
+
+                                    <option value={2}>
+                                        2 Stars
+                                    </option>
+
+                                    <option value={3}>
+                                        3 Stars
+                                    </option>
+
+                                    <option value={4}>
+                                        4 Stars
+                                    </option>
+
+                                    <option value={5}>
+                                        5 Stars
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+
+                            <div className="form-group">
+
+                                <label>
+                                    Review
+                                </label>
+
+                                <textarea
+                                    value={reviewText}
+                                    onChange={(e) =>
+                                        setReviewText(
+                                            e.target.value
+                                        )
+                                    }
+                                    maxLength={1000}
+                                    placeholder="Enter review"
+                                    rows="4"
+                                />
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="form-actions">
+
+                            <button
+                                type="submit"
+                                disabled={savingReview}
+                            >
+                                {savingReview
+                                    ? "Saving..."
+                                    : editingReviewId
+                                        ? "Update Review"
+                                        : "Add Review"}
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className="cancel-btn"
+                                onClick={resetReviewForm}
+                            >
+                                Clear
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </section>
+
+
+                {/* REVIEW DASHBOARD */}
+
+                <section className="table-card">
+
+                    <div className="table-header">
+
+                        <div>
+
+                            <h2>
+                                Review Management
+                            </h2>
+
+                            <p>
+                                Manage customer reviews and ratings
+                            </p>
+
+                        </div>
+
+
+                        <div>
+
+                            <select
+                                value={reviewStatusFilter}
+                                onChange={(e) =>
+                                    setReviewStatusFilter(
+                                        e.target.value
+                                    )
+                                }
+                            >
+
+                                <option value="ALL">
+                                    All Reviews
+                                </option>
+
+                                <option value="true">
+                                    Approved
+                                </option>
+
+                                <option value="false">
+                                    Pending
+                                </option>
+
+                            </select>
+
+
+                            <button
+                                onClick={loadReviews}
+                            >
+                                Refresh
+                            </button>
+
+                        </div>
+
+                    </div>
+
+
+                    <div className="table-container">
+
+                        {loadingReviews ? (
+
+                            <p className="empty">
+                                Loading reviews...
+                            </p>
+
+                        ) : reviews.length === 0 ? (
+
+                            <p className="empty">
+                                No reviews found
+                            </p>
+
+                        ) : (
+
+                            <table>
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Review ID
+                                        </th>
+
+                                        <th>
+                                            Product
+                                        </th>
+
+                                        <th>
+                                            Customer
+                                        </th>
+
+                                        <th>
+                                            Rating
+                                        </th>
+
+                                        <th>
+                                            Review
+                                        </th>
+
+                                        <th>
+                                            Status
+                                        </th>
+
+                                        <th>
+                                            Created At
+                                        </th>
+
+                                        <th>
+                                            Actions
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody>
+
+                                    {reviews
+                                        .filter((review) => {
+
+                                            if (
+                                                reviewStatusFilter ===
+                                                "ALL"
+                                            ) {
+                                                return true;
+                                            }
+
+                                            return String(
+                                                review.status
+                                            ) ===
+                                                reviewStatusFilter;
+
+                                        })
+                                        .map((review) => (
+
+                                            <tr
+                                                key={
+                                                    review.reviewId
+                                                }
+                                            >
+
+                                                <td>
+                                                    {
+                                                        review.reviewId
+                                                    }
+                                                </td>
+
+
+                                                <td>
+                                                    {review.product?.productName || "-"}
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        review.customer
+                                                            ? `${review.customer.firstName || ""} ${review.customer.lastName || ""}`
+                                                            : "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    {"⭐".repeat(
+                                                        review.rating || 0
+                                                    )}
+
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        review.reviewText ||
+                                                        "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    <span
+                                                        className={
+                                                            review.status
+                                                                ? "status active"
+                                                                : "status pending"
+                                                        }
+                                                    >
+
+                                                        {review.status
+                                                            ? "Approved"
+                                                            : "Pending"}
+
+                                                    </span>
+
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        review.createdAt
+                                                            ? new Date(
+                                                                review.createdAt
+                                                            ).toLocaleString()
+                                                            : "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    <button
+                                                        className="edit-btn"
+                                                        onClick={() =>
+                                                            handleReviewEdit(
+                                                                review
+                                                            )
+                                                        }
+                                                    >
+                                                        Edit
+                                                    </button>
+
+
+                                                    {!review.status && (
+
+                                                        <button
+                                                            className="edit-btn"
+                                                            onClick={() =>
+                                                                handleReviewModerate(
+                                                                    review.reviewId,
+                                                                    true
+                                                                )
+                                                            }
+                                                        >
+                                                            Approve
+                                                        </button>
+
+                                                    )}
+
+
+                                                    {review.status && (
+
+                                                        <button
+                                                            className="delete-btn"
+                                                            onClick={() =>
+                                                                handleReviewModerate(
+                                                                    review.reviewId,
+                                                                    false
+                                                                )
+                                                            }
+                                                        >
+                                                            Reject
+                                                        </button>
+
+                                                    )}
+
+
+                                                    <button
+                                                        className="delete-btn"
+                                                        onClick={() =>
+                                                            handleReviewDelete(
+                                                                review.reviewId
+                                                            )
+                                                        }
+                                                    >
+                                                        Delete
+                                                    </button>
+
+                                                </td>
+
+                                            </tr>
+
+                                        ))}
 
                                 </tbody>
 
