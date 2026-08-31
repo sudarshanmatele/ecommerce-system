@@ -53,6 +53,15 @@ import {
     moveWishlistToCart
 } from "./api/wishlistApi";
 
+import {
+    getAllShipping,
+    trackShipment,
+    getShippingByStatus,
+    createShipping,
+    updateShipping,
+    deleteShipping
+} from "./api/shippingApi";
+
 
 function App() {
 
@@ -171,6 +180,39 @@ function App() {
         useState(false);
 
     const [moveQuantity] = useState(1);
+
+
+    // ============================================================
+    // SHIPPING STATE
+    // ============================================================
+
+    const [shippingItems, setShippingItems] = useState([]);
+
+    const [shippingOrderId, setShippingOrderId] = useState("");
+
+    const [shippingCourierService, setShippingCourierService] =
+        useState("");
+
+    const [shippingTrackingNumber, setShippingTrackingNumber] =
+        useState("");
+
+    const [shippingStatus, setShippingStatus] =
+        useState("Shipped");
+
+    const [shippingCost, setShippingCost] =
+        useState("");
+
+    const [shippingStatusFilter, setShippingStatusFilter] =
+        useState("ALL");
+
+    const [editingShippingId, setEditingShippingId] =
+        useState(null);
+
+    const [loadingShipping, setLoadingShipping] =
+        useState(false);
+
+    const [savingShipping, setSavingShipping] =
+        useState(false);
 
 
     // ============================================================
@@ -536,6 +578,64 @@ function App() {
 
         }
 
+        // ---------------- SHIPPING ----------------
+
+        if (activePage === "shipping") {
+
+            try {
+
+                setLoadingShipping(true);
+
+                let response;
+
+                if (
+                    shippingStatusFilter === "ALL" ||
+                    shippingStatusFilter === ""
+                ) {
+
+                    response = await getAllShipping();
+
+                } else {
+
+                    response = await getShippingByStatus(
+                        shippingStatusFilter
+                    );
+
+                }
+
+                if (!cancelled) {
+
+                    setShippingItems(
+                        Array.isArray(response.data)
+                            ? response.data
+                            : []
+                    );
+
+                }
+
+            } catch (error) {
+
+                if (!cancelled) {
+
+                    console.error(
+                        "Error loading shipping:",
+                        error
+                    );
+
+                }
+
+            } finally {
+
+                if (!cancelled) {
+
+                    setLoadingShipping(false);
+
+                }
+
+            }
+
+        }
+
     }
 
 
@@ -550,7 +650,7 @@ function App() {
 
         };
 
-    }, [activePage, orderFilter, paymentFilter]);
+    }, [activePage, orderFilter, paymentFilter, shippingStatusFilter]);
 
 
     // ============================================================
@@ -1943,6 +2043,332 @@ function App() {
 
     };
 
+
+    // ============================================================
+    // SHIPPING FUNCTIONS
+    // ============================================================
+
+    const loadShippingItems = async () => {
+
+        try {
+
+            setLoadingShipping(true);
+
+            let response;
+
+            if (
+                shippingStatusFilter === "ALL" ||
+                shippingStatusFilter === ""
+            ) {
+
+                response = await getAllShipping();
+
+            } else {
+
+                response = await getShippingByStatus(
+                    shippingStatusFilter
+                );
+
+            }
+
+            setShippingItems(
+                Array.isArray(response.data)
+                    ? response.data
+                    : []
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error loading shipping:",
+                error
+            );
+
+            setShippingItems([]);
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to load shipping information"
+            );
+
+        } finally {
+
+            setLoadingShipping(false);
+
+        }
+
+    };
+
+
+    const resetShippingForm = () => {
+
+        setShippingOrderId("");
+
+        setShippingCourierService("");
+
+        setShippingTrackingNumber("");
+
+        setShippingStatus("Shipped");
+
+        setShippingCost("");
+
+        setEditingShippingId(null);
+
+    };
+
+
+    const handleShippingSubmit = async (e) => {
+
+        e.preventDefault();
+
+        if (!shippingOrderId) {
+
+            alert("Please select an order");
+
+            return;
+
+        }
+
+        if (!shippingCourierService.trim()) {
+
+            alert("Courier service is required");
+
+            return;
+
+        }
+
+        if (!shippingTrackingNumber.trim()) {
+
+            alert("Tracking number is required");
+
+            return;
+
+        }
+
+        if (!shippingStatus) {
+
+            alert("Shipping status is required");
+
+            return;
+
+        }
+
+        if (
+            shippingCost === "" ||
+            Number(shippingCost) < 0
+        ) {
+
+            alert(
+                "Shipping cost must be 0 or greater"
+            );
+
+            return;
+
+        }
+
+
+        try {
+
+            setSavingShipping(true);
+
+
+            if (editingShippingId) {
+
+                await updateShipping(
+                    editingShippingId,
+                    shippingCourierService.trim(),
+                    shippingTrackingNumber.trim(),
+                    shippingStatus,
+                    Number(shippingCost)
+                );
+
+                alert(
+                    "Shipping information updated successfully"
+                );
+
+            } else {
+
+                await createShipping(
+                    Number(shippingOrderId),
+                    shippingCourierService.trim(),
+                    shippingTrackingNumber.trim(),
+                    shippingStatus,
+                    Number(shippingCost)
+                );
+
+                alert(
+                    "Shipping information created successfully"
+                );
+
+            }
+
+
+            resetShippingForm();
+
+            await loadShippingItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error saving shipping:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to save shipping information"
+            );
+
+        } finally {
+
+            setSavingShipping(false);
+
+        }
+
+    };
+
+
+    const handleShippingEdit = (shipping) => {
+
+        setEditingShippingId(
+            shipping.shippingId
+        );
+
+
+        setShippingOrderId(
+            shipping.order?.orderId
+                ? String(shipping.order.orderId)
+                : ""
+        );
+
+
+        setShippingCourierService(
+            shipping.courierService || ""
+        );
+
+
+        setShippingTrackingNumber(
+            shipping.trackingNumber || ""
+        );
+
+
+        setShippingStatus(
+            shipping.shippingStatus || "Shipped"
+        );
+
+
+        setShippingCost(
+            shipping.shippingCost !== null &&
+            shipping.shippingCost !== undefined
+                ? String(shipping.shippingCost)
+                : ""
+        );
+
+    };
+
+
+    const handleShippingDelete = async (
+        shippingId
+    ) => {
+
+        const confirmed = window.confirm(
+            "Are you sure you want to delete this shipping record?"
+        );
+
+        if (!confirmed) {
+
+            return;
+
+        }
+
+
+        try {
+
+            await deleteShipping(
+                shippingId
+            );
+
+            alert(
+                "Shipping deleted successfully"
+            );
+
+            await loadShippingItems();
+
+        } catch (error) {
+
+            console.error(
+                "Error deleting shipping:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Unable to delete shipping"
+            );
+
+        }
+
+    };
+
+
+    const handleTrackShipment = async () => {
+
+        if (!shippingTrackingNumber.trim()) {
+
+            alert(
+                "Please enter a tracking number"
+            );
+
+            return;
+
+        }
+
+
+        try {
+
+            const response =
+                await trackShipment(
+                    shippingTrackingNumber.trim()
+                );
+
+
+            const shipping =
+                response.data;
+
+
+            alert(
+                `Tracking Number: ${
+                    shipping.trackingNumber
+                }\n` +
+                `Courier: ${
+                    shipping.courierService
+                }\n` +
+                `Status: ${
+                    shipping.shippingStatus
+                }`
+            );
+
+        } catch (error) {
+
+            console.error(
+                "Error tracking shipment:",
+                error
+            );
+
+            alert(
+                error.response?.data?.message ||
+                error.response?.data ||
+                "Shipment not found"
+            );
+
+        }
+
+    };
+
+
     // ============================================================
     // RENDER
     // ============================================================
@@ -2027,17 +2453,19 @@ function App() {
                 </button>
 
                 <button
-                onClick={() =>
-                    setActivePage("wishlist")
-                }
-                className={
-                    activePage === "wishlist"
-                        ? "nav-btn active"
-                        : "nav-btn"
-                }
-            >
-                Wishlist
-            </button>
+                    onClick={() =>
+                        setActivePage("wishlist")
+                    }
+                    className={
+                        activePage === "wishlist"
+                            ? "nav-btn active"
+                            : "nav-btn"
+                    }
+                >
+                    Wishlist
+                </button>
+
+                
 
                 <button
                 onClick={async () => {
@@ -2068,6 +2496,17 @@ function App() {
                 }
             >
                 Cart
+            </button>
+
+            <button
+                onClick={() => setActivePage("shipping")}
+                className={
+                    activePage === "shipping"
+                        ? "nav-btn active"
+                        : "nav-btn"
+                }
+            >
+                Shipping
             </button>
 
                 </div>
@@ -4697,6 +5136,555 @@ function App() {
             </section>
 
         </>
+
+        )}
+
+
+        {activePage === "shipping" && (
+
+            <>
+
+                {/* ============================================================
+                    SHIPPING FORM
+                ============================================================ */}
+
+                <section className="form-card">
+
+                    <h2>
+                        {editingShippingId
+                            ? "Update Shipping Information"
+                            : "Create Shipping"}
+                    </h2>
+
+                    <form
+                        onSubmit={handleShippingSubmit}
+                    >
+
+                        <div className="form-row">
+
+                            {/* ORDER */}
+
+                            <div className="form-group">
+
+                                <label>
+                                    Order
+                                </label>
+
+                                <select
+                                    value={shippingOrderId}
+                                    onChange={(e) =>
+                                        setShippingOrderId(
+                                            e.target.value
+                                        )
+                                    }
+                                    disabled={
+                                        !!editingShippingId
+                                    }
+                                >
+
+                                    <option value="">
+                                        Select Order
+                                    </option>
+
+                                    {orders.map(
+                                        (order) => (
+
+                                            <option
+                                                key={
+                                                    order.orderId
+                                                }
+                                                value={
+                                                    order.orderId
+                                                }
+                                            >
+                                                Order #
+                                                {
+                                                    order.orderId
+                                                }
+                                            </option>
+
+                                        )
+                                    )}
+
+                                </select>
+
+                            </div>
+
+
+                            {/* COURIER */}
+
+                            <div className="form-group">
+
+                                <label>
+                                    Courier Service
+                                </label>
+
+                                <input
+                                    type="text"
+                                    value={
+                                        shippingCourierService
+                                    }
+                                    onChange={(e) =>
+                                        setShippingCourierService(
+                                            e.target.value
+                                        )
+                                    }
+                                    placeholder="Enter courier service"
+                                />
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="form-row">
+
+                            {/* TRACKING NUMBER */}
+
+                            <div className="form-group">
+
+                                <label>
+                                    Tracking Number
+                                </label>
+
+                                <input
+                                    type="text"
+                                    value={
+                                        shippingTrackingNumber
+                                    }
+                                    onChange={(e) =>
+                                        setShippingTrackingNumber(
+                                            e.target.value
+                                        )
+                                    }
+                                    placeholder="Enter tracking number"
+                                />
+
+                            </div>
+
+
+                            {/* SHIPPING STATUS */}
+
+                            <div className="form-group">
+
+                                <label>
+                                    Shipping Status
+                                </label>
+
+                                <select
+                                    value={
+                                        shippingStatus
+                                    }
+                                    onChange={(e) =>
+                                        setShippingStatus(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+
+                                    <option value="Shipped">
+                                        Shipped
+                                    </option>
+
+                                    <option value="In Transit">
+                                        In Transit
+                                    </option>
+
+                                    <option value="Delivered">
+                                        Delivered
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="form-row">
+
+                            {/* SHIPPING COST */}
+
+                            <div className="form-group">
+
+                                <label>
+                                    Shipping Cost
+                                </label>
+
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                        shippingCost
+                                    }
+                                    onChange={(e) =>
+                                        setShippingCost(
+                                            e.target.value
+                                        )
+                                    }
+                                    placeholder="Enter shipping cost"
+                                />
+
+                            </div>
+
+                        </div>
+
+
+                        <div className="form-actions">
+
+                            <button
+                                type="submit"
+                                disabled={
+                                    savingShipping
+                                }
+                            >
+
+                                {savingShipping
+                                    ? "Saving..."
+                                    : editingShippingId
+                                        ? "Update Shipping"
+                                        : "Create Shipping"}
+
+                            </button>
+
+
+                            <button
+                                type="button"
+                                className="cancel-btn"
+                                onClick={
+                                    resetShippingForm
+                                }
+                            >
+                                Clear
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </section>
+
+
+                {/* ============================================================
+                    TRACK SHIPMENT
+                ============================================================ */}
+
+                <section className="form-card">
+
+                    <h2>
+                        Track Shipment
+                    </h2>
+
+                    <div className="form-row">
+
+                        <div className="form-group">
+
+                            <label>
+                                Tracking Number
+                            </label>
+
+                            <input
+                                type="text"
+                                value={
+                                    shippingTrackingNumber
+                                }
+                                onChange={(e) =>
+                                    setShippingTrackingNumber(
+                                        e.target.value
+                                    )
+                                }
+                                placeholder="Enter tracking number"
+                            />
+
+                        </div>
+
+
+                        <div className="form-group">
+
+                            <label>
+                                &nbsp;
+                            </label>
+
+                            <button
+                                type="button"
+                                onClick={
+                                    handleTrackShipment
+                                }
+                            >
+                                Track Shipment
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+
+                {/* ============================================================
+                    SHIPPING DASHBOARD
+                ============================================================ */}
+
+                <section className="table-card">
+
+                    <div className="table-header">
+
+                        <div>
+
+                            <h2>
+                                Shipping Dashboard
+                            </h2>
+
+                            <p>
+                                View and manage shipping information
+                            </p>
+
+                        </div>
+
+
+                        <div>
+
+                            <button
+                                onClick={
+                                    loadShippingItems
+                                }
+                            >
+                                Refresh
+                            </button>
+
+
+                            <select
+                                value={
+                                    shippingStatusFilter
+                                }
+                                onChange={(e) =>
+                                    setShippingStatusFilter(
+                                        e.target.value
+                                    )
+                                }
+                            >
+
+                                <option value="ALL">
+                                    All Status
+                                </option>
+
+                                <option value="Shipped">
+                                    Shipped
+                                </option>
+
+                                <option value="In Transit">
+                                    In Transit
+                                </option>
+
+                                <option value="Delivered">
+                                    Delivered
+                                </option>
+
+                            </select>
+
+                        </div>
+
+                    </div>
+
+
+                    <div className="table-container">
+
+                        {loadingShipping ? (
+
+                            <p className="empty">
+                                Loading shipping information...
+                            </p>
+
+                        ) : shippingItems.length === 0 ? (
+
+                            <p className="empty">
+                                No shipping records found
+                            </p>
+
+                        ) : (
+
+                            <table>
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>
+                                            Shipping ID
+                                        </th>
+
+                                        <th>
+                                            Order ID
+                                        </th>
+
+                                        <th>
+                                            Courier
+                                        </th>
+
+                                        <th>
+                                            Tracking Number
+                                        </th>
+
+                                        <th>
+                                            Status
+                                        </th>
+
+                                        <th>
+                                            Shipping Cost
+                                        </th>
+
+                                        <th>
+                                            Created At
+                                        </th>
+
+                                        <th>
+                                            Updated At
+                                        </th>
+
+                                        <th>
+                                            Actions
+                                        </th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody>
+
+                                    {shippingItems.map(
+                                        (shipping) => (
+
+                                            <tr
+                                                key={
+                                                    shipping.shippingId
+                                                }
+                                            >
+
+                                                <td>
+                                                    {
+                                                        shipping.shippingId
+                                                    }
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        shipping.order?.orderId ||
+                                                        "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        shipping.courierService ||
+                                                        "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        shipping.trackingNumber ||
+                                                        "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    <span
+                                                        className={
+                                                            shipping.shippingStatus ===
+                                                                "Delivered"
+                                                                ? "status active"
+                                                                : "status pending"
+                                                        }
+                                                    >
+                                                        {
+                                                            shipping.shippingStatus
+                                                        }
+                                                    </span>
+
+                                                </td>
+
+
+                                                <td>
+                                                    ₹
+                                                    {Number(
+                                                        shipping.shippingCost ||
+                                                        0
+                                                    ).toFixed(2)}
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        shipping.createdAt
+                                                            ? new Date(
+                                                                shipping.createdAt
+                                                            ).toLocaleString()
+                                                            : "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+                                                    {
+                                                        shipping.updatedAt
+                                                            ? new Date(
+                                                                shipping.updatedAt
+                                                            ).toLocaleString()
+                                                            : "-"
+                                                    }
+                                                </td>
+
+
+                                                <td>
+
+                                                    <button
+                                                        className="edit-btn"
+                                                        onClick={() =>
+                                                            handleShippingEdit(
+                                                                shipping
+                                                            )
+                                                        }
+                                                    >
+                                                        Edit
+                                                    </button>
+
+
+                                                    <button
+                                                        className="delete-btn"
+                                                        onClick={() =>
+                                                            handleShippingDelete(
+                                                                shipping.shippingId
+                                                            )
+                                                        }
+                                                    >
+                                                        Delete
+                                                    </button>
+
+                                                </td>
+
+                                            </tr>
+
+                                        )
+                                    )}
+
+                                </tbody>
+
+                            </table>
+
+                        )}
+
+                    </div>
+
+                </section>
+
+            </>
 
         )}
 
