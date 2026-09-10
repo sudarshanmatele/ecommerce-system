@@ -70,6 +70,14 @@ import {
     deleteReview
 } from "./api/reviewApi";
 
+import {
+    getAllCoupons,
+    createCoupon,
+    updateCoupon,
+    deactivateCoupon,
+    deleteCoupon
+} from "./api/couponApi";
+
 
 function App() {
 
@@ -252,6 +260,23 @@ function App() {
 
     const [savingReview, setSavingReview] =
         useState(false);
+
+         // ============================================================
+        // COUPON STATES
+        // ============================================================
+
+        const [coupons, setCoupons] = useState([]);
+        const [loadingCoupons, setLoadingCoupons] = useState(false);
+
+        const [couponCode, setCouponCode] = useState("");
+        const [discountType, setDiscountType] = useState("Percentage");
+        const [discountValue, setDiscountValue] = useState("");
+        const [validFrom, setValidFrom] = useState("");
+        const [validTo, setValidTo] = useState("");
+        const [usageLimit, setUsageLimit] = useState("");
+
+        const [editingCouponId, setEditingCouponId] = useState(null);
+        const [savingCoupon, setSavingCoupon] = useState(false);
 
 
     // ============================================================
@@ -718,6 +743,7 @@ function App() {
             }
 
         }
+
 
     }
 
@@ -2500,6 +2526,115 @@ function App() {
 
     };
 
+      /////////
+            const loadCoupons = async () => {
+            try {
+                setLoadingCoupons(true);
+
+                const response = await getAllCoupons();
+
+                setCoupons(
+                    Array.isArray(response.data)
+                        ? response.data
+                        : []
+                );
+            } catch (error) {
+                console.error("Error loading coupons:", error);
+                alert("Failed to load coupons");
+            } finally {
+                setLoadingCoupons(false);
+            }
+        };
+
+        const resetCouponForm = () => {
+            setCouponCode("");
+            setDiscountType("Percentage");
+            setDiscountValue("");
+            setValidFrom("");
+            setValidTo("");
+            setUsageLimit("");
+            setEditingCouponId(null);
+        };
+
+        const handleCouponSubmit = async (e) => {
+            e.preventDefault();
+
+            try {
+                setSavingCoupon(true);
+
+                const couponData = {
+                    couponCode,
+                    discountType,
+                    discountValue: Number(discountValue),
+                    validFrom,
+                    validTo,
+                    usageLimit: usageLimit
+                        ? Number(usageLimit)
+                        : null
+                };
+
+                if (editingCouponId) {
+                    await updateCoupon(editingCouponId, couponData);
+                    alert("Coupon updated successfully");
+                } else {
+                    await createCoupon(couponData);
+                    alert("Coupon created successfully");
+                }
+
+                resetCouponForm();
+                await loadCoupons();
+
+            } catch (error) {
+                console.error("Error saving coupon:", error);
+                alert(
+                    error.response?.data?.message ||
+                    "Failed to save coupon"
+                );
+            } finally {
+                setSavingCoupon(false);
+            }
+        };
+
+        const handleCouponEdit = (coupon) => {
+            setEditingCouponId(coupon.couponId);
+            setCouponCode(coupon.couponCode);
+            setDiscountType(coupon.discountType);
+            setDiscountValue(coupon.discountValue);
+            setValidFrom(coupon.validFrom);
+            setValidTo(coupon.validTo);
+            setUsageLimit(coupon.usageLimit || "");
+        };
+
+        const handleCouponDeactivate = async (couponId) => {
+            if (!window.confirm("Deactivate this coupon?")) {
+                return;
+            }
+
+            try {
+                await deactivateCoupon(couponId);
+                alert("Coupon deactivated successfully");
+                await loadCoupons();
+            } catch (error) {
+                console.error("Error deactivating coupon:", error);
+                alert("Failed to deactivate coupon");
+            }
+        };
+
+        const handleCouponDelete = async (couponId) => {
+            if (!window.confirm("Delete/deactivate this coupon?")) {
+                return;
+            }
+
+            try {
+                await deleteCoupon(couponId);
+                alert("Coupon deleted successfully");
+                await loadCoupons();
+            } catch (error) {
+                console.error("Error deleting coupon:", error);
+                alert("Failed to delete coupon");
+            }
+        };
+
 
     const resetReviewForm = () => {
 
@@ -2691,6 +2826,9 @@ function App() {
     };
 
 
+    
+
+
     // ============================================================
     // RENDER
     // ============================================================
@@ -2840,6 +2978,20 @@ function App() {
                 }
             >
                 Reviews
+            </button>
+
+            <button
+                onClick={() => {
+                    setActivePage("coupons");
+                    loadCoupons();
+                }}
+                className={
+                    activePage === "coupons"
+                        ? "nav-btn active"
+                        : "nav-btn"
+                }
+            >
+                Coupons
             </button>
 
                 </div>
@@ -6496,6 +6648,185 @@ function App() {
             </>
 
         )}
+
+
+        {activePage === "coupons" && (
+        <div className="dashboard-section">
+
+            <h2>Coupon & Discount Management</h2>
+
+            <form onSubmit={handleCouponSubmit} className="form-container">
+
+                <h3>
+                    {editingCouponId ? "Edit Coupon" : "Create Coupon"}
+                </h3>
+
+                <input
+                    type="text"
+                    placeholder="Coupon Code"
+                    value={couponCode}
+                    onChange={(e) =>
+                        setCouponCode(e.target.value.toUpperCase())
+                    }
+                    required
+                />
+
+                <select
+                    value={discountType}
+                    onChange={(e) => setDiscountType(e.target.value)}
+                >
+                    <option value="Percentage">Percentage</option>
+                    <option value="Fixed Amount">Fixed Amount</option>
+                </select>
+
+                <input
+                    type="number"
+                    placeholder="Discount Value"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    min="0.01"
+                    step="0.01"
+                    required
+                />
+
+                <label>Valid From</label>
+                <input
+                    type="datetime-local"
+                    value={validFrom}
+                    onChange={(e) => setValidFrom(e.target.value)}
+                    required
+                />
+
+                <label>Valid To</label>
+                <input
+                    type="datetime-local"
+                    value={validTo}
+                    onChange={(e) => setValidTo(e.target.value)}
+                    required
+                />
+
+                <input
+                    type="number"
+                    placeholder="Usage Limit"
+                    value={usageLimit}
+                    onChange={(e) => setUsageLimit(e.target.value)}
+                    min="1"
+                />
+
+                <button type="submit" disabled={savingCoupon}>
+                    {savingCoupon
+                        ? "Saving..."
+                        : editingCouponId
+                        ? "Update Coupon"
+                        : "Create Coupon"}
+                </button>
+
+                {editingCouponId && (
+                    <button type="button" onClick={resetCouponForm}>
+                        Cancel
+                    </button>
+                )}
+
+            </form>
+
+            <hr />
+
+            <h3>Coupon Dashboard</h3>
+
+            {loadingCoupons ? (
+                <p>Loading coupons...</p>
+            ) : coupons.length === 0 ? (
+                <p>No coupons found.</p>
+            ) : (
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Code</th>
+                            <th>Discount Type</th>
+                            <th>Discount Value</th>
+                            <th>Valid From</th>
+                            <th>Valid To</th>
+                            <th>Usage Limit</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        {coupons.map((coupon) => (
+                            <tr key={coupon.couponId}>
+
+                                <td>{coupon.couponId}</td>
+                                <td>{coupon.couponCode}</td>
+                                <td>{coupon.discountType}</td>
+
+                                <td>
+                                    {coupon.discountType === "Percentage"
+                                        ? `${coupon.discountValue}%`
+                                        : `₹${coupon.discountValue}`}
+                                </td>
+
+                                <td>
+                                    {coupon.validFrom
+                                        ? new Date(coupon.validFrom).toLocaleString()
+                                        : "-"}
+                                </td>
+
+                                <td>
+                                    {coupon.validTo
+                                        ? new Date(coupon.validTo).toLocaleString()
+                                        : "-"}
+                                </td>
+
+                                <td>
+                                    {coupon.usageLimit || "Unlimited"}
+                                </td>
+
+                                <td>
+                                    {coupon.status ? "Active" : "Inactive"}
+                                </td>
+
+                                <td>
+                                    <button
+                                        onClick={() =>
+                                            handleCouponEdit(coupon)
+                                        }
+                                    >
+                                        Edit
+                                    </button>
+
+                                    {coupon.status && (
+                                        <button
+                                            onClick={() =>
+                                                handleCouponDeactivate(
+                                                    coupon.couponId
+                                                )
+                                            }
+                                        >
+                                            Deactivate
+                                        </button>
+                                    )}
+
+                                    <button
+                                        onClick={() =>
+                                            handleCouponDelete(
+                                                coupon.couponId
+                                            )
+                                        }
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
+
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
+
+        </div>
+    )}
 
 
 
